@@ -70,6 +70,20 @@ async function main() {
     if (!existing) await prisma.ticketType.create({ data: t });
   }
 
+  // --- Layout físico de la sala: 4 módulos pareja + 2 módulos trío ---
+  const venueModulesData = [
+    { type: "COUPLE" as const, label: "Módulo pareja 1", baseCapacity: 2, sortOrder: 1 },
+    { type: "COUPLE" as const, label: "Módulo pareja 2", baseCapacity: 2, sortOrder: 2 },
+    { type: "COUPLE" as const, label: "Módulo pareja 3", baseCapacity: 2, sortOrder: 3 },
+    { type: "COUPLE" as const, label: "Módulo pareja 4", baseCapacity: 2, sortOrder: 4 },
+    { type: "TRIO" as const, label: "Módulo trío A", baseCapacity: 3, sortOrder: 5 },
+    { type: "TRIO" as const, label: "Módulo trío B", baseCapacity: 3, sortOrder: 6 },
+  ];
+  for (const m of venueModulesData) {
+    const existing = await prisma.venueModule.findFirst({ where: { label: m.label } });
+    if (!existing) await prisma.venueModule.create({ data: m });
+  }
+
   // --- Películas ---
   const moviesData = [
     {
@@ -118,7 +132,7 @@ async function main() {
         data: {
           movieId: movie.id,
           startsAt,
-          capacity: 15,
+          capacity: 16,
           status: "PUBLISHED",
           weekPublished: true,
         },

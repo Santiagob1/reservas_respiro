@@ -15,3 +15,6 @@ if (!looksLocal) {
       "Revisa tu archivo .env antes de ejecutar `npm run test`."
   );
 }
+
+const { ensureVenueModules } = await import("./helpers");
+await ensureVenueModules();

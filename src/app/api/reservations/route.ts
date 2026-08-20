@@ -22,6 +22,8 @@ const bodySchema = z.object({
   acceptedTerms: z
     .boolean()
     .refine((v) => v === true, "Debes aceptar los términos y las políticas para continuar."),
+  // Los únicos métodos que un cliente puede iniciar por sí mismo desde la web.
+  paymentMethod: z.enum(["ONLINE", "BANK_TRANSFER"]).default("ONLINE"),
 });
 
 export async function POST(req: Request) {
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
       items: body.items,
       customer: body.customer,
       source: "WEB",
-      paymentMethod: "ONLINE",
+      paymentMethod: body.paymentMethod,
     });
 
     return ok(

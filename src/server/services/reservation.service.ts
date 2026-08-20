@@ -11,7 +11,8 @@ import {
   ShowtimeNotFoundException,
   AlreadyCheckedInException,
 } from "@/server/domain/errors";
-import { lockShowtimeForUpdate, getShowtimeAvailability } from "@/server/services/availability.service";
+import { lockShowtimeForUpdate } from "@/server/services/availability.service";
+import { getShowtimeSeatingState, findSeatingPlan } from "@/server/services/seating.service";
 import { priceReservationItems, type ReservationItemInput } from "@/server/services/pricing.service";
 import { findOrCreateCustomer, type CustomerInput } from "@/server/services/customer.service";
 import { getSettings } from "@/server/services/settings.service";
@@ -24,6 +25,7 @@ const RESERVATION_INCLUDE = {
   customer: true,
   payments: { orderBy: { createdAt: "desc" as const } },
   checkIn: true,
+  moduleAssignments: { include: { venueModule: true } },
 } satisfies Prisma.ReservationInclude;
 
 export type ReservationWithDetails = Prisma.ReservationGetPayload<{
@@ -84,9 +86,16 @@ export async function createReservation(
 
     const pricing = await priceReservationItems(input.items, input.adults, input.children, tx);
 
-    const availability = await getShowtimeAvailability(input.showtimeId, tx);
-    if (availability.available < pricing.totalPeople) {
-      throw new InsufficientCapacityException(availability.available);
+    const seating = await getShowtimeSeatingState(input.showtimeId, tx);
+    const effectiveCapacity = Math.min(showtime.capacity, seating.physicalMax);
+    const availableByCeiling = effectiveCapacity - seating.occupiedSeats;
+    if (availableByCeiling < pricing.totalPeople) {
+      throw new InsufficientCapacityException(Math.max(0, availableByCeiling));
+    }
+
+    const seatingPlan = findSeatingPlan(seating.freeModules, seating.remainingAux, pricing.totalPeople);
+    if (!seatingPlan) {
+      throw new InsufficientCapacityException(Math.max(0, availableByCeiling), { unpackable: true });
     }
 
     const customer = await findOrCreateCustomer(input.customer, tx);
@@ -135,6 +144,13 @@ export async function createReservation(
                 ? "Reserva creada por el cliente"
                 : "Reserva manual creada por administrador",
           },
+        },
+        moduleAssignments: {
+          create: seatingPlan.map((s) => ({
+            venueModuleId: s.venueModuleId,
+            seatsOccupied: s.seatsOccupied,
+            usesAuxiliary: s.usesAuxiliary,
+          })),
         },
       },
       include: RESERVATION_INCLUDE,
@@ -461,9 +477,15 @@ export async function rescheduleReservation(params: {
     }
 
     const totalPeople = reservation.adults + reservation.children;
-    const availability = await getShowtimeAvailability(params.newShowtimeId, tx);
-    if (availability.available < totalPeople) {
-      throw new InsufficientCapacityException(availability.available);
+    const seating = await getShowtimeSeatingState(params.newShowtimeId, tx);
+    const effectiveCapacity = Math.min(newShowtime.capacity, seating.physicalMax);
+    const availableByCeiling = effectiveCapacity - seating.occupiedSeats;
+    if (availableByCeiling < totalPeople) {
+      throw new InsufficientCapacityException(Math.max(0, availableByCeiling));
+    }
+    const seatingPlan = findSeatingPlan(seating.freeModules, seating.remainingAux, totalPeople);
+    if (!seatingPlan) {
+      throw new InsufficientCapacityException(Math.max(0, availableByCeiling), { unpackable: true });
     }
 
     const code = await generateUniqueCode(tx);
@@ -494,6 +516,13 @@ export async function rescheduleReservation(params: {
             changedById: params.adminUserId,
             reason: `Reagendada desde la reserva ${reservation.code}`,
           },
+        },
+        moduleAssignments: {
+          create: seatingPlan.map((s) => ({
+            venueModuleId: s.venueModuleId,
+            seatsOccupied: s.seatsOccupied,
+            usesAuxiliary: s.usesAuxiliary,
+          })),
         },
       },
       include: RESERVATION_INCLUDE,

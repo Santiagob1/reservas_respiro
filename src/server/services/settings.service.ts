@@ -9,7 +9,10 @@ export const DEFAULT_SETTINGS = {
   cinema_email: "reservas@cinerespiro.com",
   cinema_address: "Por confirmar",
   arrival_info: "Te recomendamos llegar 15 minutos antes de la función y presentar tu código o QR en la entrada.",
-  default_capacity: 15,
+  // Capacidad física máxima de la sala: 4 módulos pareja (2) + 2 módulos trío (3)
+  // + 2 piezas auxiliares (+1 cada una) = 14 base, 16 con ambas auxiliares en uso.
+  default_capacity: 16,
+  auxiliary_module_count: 2,
   default_showtime_hour: "19:00",
   reservation_hold_minutes: Number(process.env.RESERVATION_HOLD_MINUTES ?? 15),
   cash_reservation_hold_hours: Number(process.env.CASH_RESERVATION_HOLD_HOURS ?? 24),
@@ -21,6 +24,12 @@ export const DEFAULT_SETTINGS = {
   about_us_text:
     "Cine Respiro nació de una idea simple: el cine se disfruta mejor de cerca. Una sola sala, cupos limitados y una función al día para que cada proyección se sienta íntima — como ver una película en la sala de tu casa, pero con la pantalla grande, buen café y buena compañía.",
   business_sales_email: process.env.BUSINESS_SALES_EMAIL ?? "",
+  // Pago: "transfer" (transferencia a cuenta/llave interoperable + comprobante
+  // por WhatsApp, verificado manualmente por el admin) u "online" (pasarela).
+  payment_mode: "transfer" as "transfer" | "online",
+  payment_transfer_key: "",
+  payment_transfer_instructions:
+    "Transfiere el valor total a la llave/cuenta indicada y envía el comprobante por WhatsApp con tu código de reserva para confirmarla.",
 } as const;
 
 export type SettingsMap = typeof DEFAULT_SETTINGS;
