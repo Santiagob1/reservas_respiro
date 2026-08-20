@@ -8,6 +8,7 @@ import {
   ValidationException,
 } from "@/server/domain/errors";
 import { getShowtimeAvailability } from "@/server/services/availability.service";
+import { getPhysicalRoomCapacity } from "@/server/services/seating.service";
 
 const ACTIVE_RESERVATION_STATUSES = [
   "PENDING_PAYMENT",
@@ -52,6 +53,7 @@ export async function getShowtimeById(id: string) {
 
 export async function createShowtime(input: ShowtimeInput) {
   validateShowtimeInput(input);
+  await validateCapacityAgainstRoom(input.capacity);
   const startsAt = zonedDateTimeToUtc(input.date, input.time);
   return prisma.showtime.create({
     data: {
@@ -80,6 +82,7 @@ export async function updateShowtime(
   }
 
   if (patch.capacity !== undefined && patch.capacity !== showtime.capacity) {
+    await validateCapacityAgainstRoom(patch.capacity);
     const availability = await getShowtimeAvailability(id);
     const committed = availability.confirmed + availability.pending;
     if (patch.capacity < committed) {
@@ -124,6 +127,15 @@ export async function countActiveReservations(showtimeId: string): Promise<numbe
   return prisma.reservation.count({
     where: { showtimeId, status: { in: [...ACTIVE_RESERVATION_STATUSES] } },
   });
+}
+
+async function validateCapacityAgainstRoom(capacity: number) {
+  const room = await getPhysicalRoomCapacity();
+  if (capacity > room.max) {
+    throw new ValidationException(
+      `La capacidad no puede superar el máximo físico de la sala (${room.max} personas con todos los módulos auxiliares en uso).`
+    );
+  }
 }
 
 function validateShowtimeInput(input: ShowtimeInput) {

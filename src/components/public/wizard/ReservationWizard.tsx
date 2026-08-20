@@ -12,6 +12,13 @@ import { StepPayment } from "./StepPayment";
 import type { TicketTypeDto, WizardState } from "./types";
 import type { PublicShowtimeDto } from "@/server/dto/showtime.dto";
 
+export interface PublicPaymentSettings {
+  paymentMode: "transfer" | "online";
+  paymentTransferKey: string;
+  paymentTransferInstructions: string;
+  whatsapp: string;
+}
+
 const INITIAL_STATE: WizardState = {
   step: 1,
   showtime: null,
@@ -26,19 +33,22 @@ export function ReservationWizard({ initialShowtimeId }: { initialShowtimeId?: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketTypeDto[]>([]);
+  const [paymentSettings, setPaymentSettings] = useState<PublicPaymentSettings | null>(null);
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [allShowtimes, allTicketTypes] = await Promise.all([
+        const [allShowtimes, allTicketTypes, settings] = await Promise.all([
           apiGet<PublicShowtimeDto[]>("/api/showtimes"),
           apiGet<TicketTypeDto[]>("/api/ticket-types"),
+          apiGet<PublicPaymentSettings>("/api/settings/public"),
         ]);
         if (cancelled) return;
 
         setTicketTypes(allTicketTypes);
+        setPaymentSettings(settings);
 
         const initial = allShowtimes.find((s) => s.id === initialShowtimeId) ?? null;
 
@@ -104,8 +114,13 @@ export function ReservationWizard({ initialShowtimeId }: { initialShowtimeId?: s
           <StepDetails state={state} onChange={patch} onBack={() => goTo(1)} onContinue={() => goTo(3)} />
         )}
 
-        {state.step === 3 && (
-          <StepPayment state={state} ticketTypes={ticketTypes} onBack={() => goTo(2)} />
+        {state.step === 3 && paymentSettings && (
+          <StepPayment
+            state={state}
+            ticketTypes={ticketTypes}
+            paymentSettings={paymentSettings}
+            onBack={() => goTo(2)}
+          />
         )}
       </div>
 

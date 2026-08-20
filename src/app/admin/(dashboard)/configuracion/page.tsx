@@ -24,6 +24,9 @@ interface Settings {
   instagram_url: string;
   about_us_text: string;
   business_sales_email: string;
+  payment_mode: "transfer" | "online";
+  payment_transfer_key: string;
+  payment_transfer_instructions: string;
 }
 
 export default function SettingsPage() {
@@ -123,6 +126,39 @@ export default function SettingsPage() {
             className={inputClass}
           />
         </Field>
+      </Section>
+
+      <Section title="Pago">
+        <Field label="Modo de pago del sitio público">
+          <select
+            value={settings.payment_mode}
+            onChange={(e) => set("payment_mode", e.target.value as "transfer" | "online")}
+            className={inputClass}
+          >
+            <option value="transfer">Transferencia + comprobante por WhatsApp</option>
+            <option value="online">Pasarela de pago en línea</option>
+          </select>
+        </Field>
+        {settings.payment_mode === "transfer" && (
+          <>
+            <Field label="Llave o cuenta interoperable para transferir">
+              <input
+                value={settings.payment_transfer_key}
+                onChange={(e) => set("payment_transfer_key", e.target.value)}
+                placeholder="Ej. llave Bre-B, número Nequi, cuenta bancaria..."
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Instrucciones de pago">
+              <textarea
+                value={settings.payment_transfer_instructions}
+                onChange={(e) => set("payment_transfer_instructions", e.target.value)}
+                rows={3}
+                className={inputClass}
+              />
+            </Field>
+          </>
+        )}
       </Section>
 
       <Section title="Reservas">

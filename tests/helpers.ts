@@ -38,6 +38,27 @@ export async function createTestShowtime(params: {
   });
 }
 
+/**
+ * El layout físico de la sala (4 módulos pareja + 2 módulos trío) es un
+ * recurso global, no algo que cada test cree/borre — igual que en producción,
+ * las pruebas asumen que ya existe (creado por `prisma/seed.ts`) y solo lo
+ * siembra aquí como red de seguridad si corren contra una base recién migrada.
+ */
+export async function ensureVenueModules() {
+  const count = await prisma.venueModule.count();
+  if (count > 0) return;
+  await prisma.venueModule.createMany({
+    data: [
+      { type: "COUPLE", label: "Módulo pareja 1", baseCapacity: 2, sortOrder: 1 },
+      { type: "COUPLE", label: "Módulo pareja 2", baseCapacity: 2, sortOrder: 2 },
+      { type: "COUPLE", label: "Módulo pareja 3", baseCapacity: 2, sortOrder: 3 },
+      { type: "COUPLE", label: "Módulo pareja 4", baseCapacity: 2, sortOrder: 4 },
+      { type: "TRIO", label: "Módulo trío A", baseCapacity: 3, sortOrder: 5 },
+      { type: "TRIO", label: "Módulo trío B", baseCapacity: 3, sortOrder: 6 },
+    ],
+  });
+}
+
 export async function createTestAdmin() {
   return prisma.adminUser.create({
     data: {

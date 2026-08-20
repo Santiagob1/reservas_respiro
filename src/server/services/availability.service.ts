@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { now } from "@/lib/timezone";
+import { getShowtimeSeatingState } from "@/server/services/seating.service";
 
 export interface AvailabilitySnapshot {
   capacity: number;
   confirmed: number; // PAYMENT_APPROVED + CONFIRMED + CHECKED_IN
   pending: number; // PENDING_PAYMENT no expirado
-  available: number;
+  available: number; // cupos físicos restantes según el empaque de módulos (ver seating.service)
 }
 
 const CONFIRMED_STATUSES = ["PAYMENT_APPROVED", "CONFIRMED", "CHECKED_IN"] as const;
@@ -37,7 +38,7 @@ export async function getShowtimeAvailability(
     return { capacity: 0, confirmed: 0, pending: 0, available: 0 };
   }
 
-  const [confirmedAgg, pendingAgg] = await Promise.all([
+  const [confirmedAgg, pendingAgg, seating] = await Promise.all([
     client.reservation.aggregate({
       where: {
         showtimeId,
@@ -53,13 +54,19 @@ export async function getShowtimeAvailability(
       },
       _sum: { adults: true, children: true },
     }),
+    getShowtimeSeatingState(showtimeId, client),
   ]);
 
   const confirmed = (confirmedAgg._sum.adults ?? 0) + (confirmedAgg._sum.children ?? 0);
   const pending = (pendingAgg._sum.adults ?? 0) + (pendingAgg._sum.children ?? 0);
-  const available = Math.max(0, showtime.capacity - confirmed - pending);
 
-  return { capacity: showtime.capacity, confirmed, pending, available };
+  // "capacity" mostrada es el menor entre el techo administrativo de la
+  // función y el máximo físico real de la sala (nunca se puede prometer más
+  // sillas de las que existen, aunque el admin ponga un número mayor).
+  const capacity = Math.min(showtime.capacity, seating.physicalMax);
+  const available = Math.max(0, capacity - seating.occupiedSeats);
+
+  return { capacity, confirmed, pending, available };
 }
 
 export async function getAvailabilityForShowtimes(

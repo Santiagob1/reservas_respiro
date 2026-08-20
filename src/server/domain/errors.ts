@@ -16,14 +16,13 @@ export class DomainError extends Error {
 }
 
 export class InsufficientCapacityException extends DomainError {
-  constructor(available: number) {
-    super(
-      "INSUFFICIENT_CAPACITY",
-      available > 0
+  constructor(available: number, options: { unpackable?: boolean } = {}) {
+    const message = options.unpackable
+      ? "No queda una combinación de sofás disponible para sentar a tu grupo junto. Prueba con otra función o un grupo más pequeño."
+      : available > 0
         ? `Solo quedan ${available} cupo${available === 1 ? "" : "s"} disponible${available === 1 ? "" : "s"}.`
-        : "Lo sentimos, esta función acaba de completar su capacidad. Selecciona otra función.",
-      409
-    );
+        : "Lo sentimos, esta función acaba de completar su capacidad. Selecciona otra función.";
+    super("INSUFFICIENT_CAPACITY", message, 409);
   }
 }
 

@@ -58,6 +58,16 @@ enum PaymentStatus {
   CANCELLED
 }
 
+// Módulo de asiento físico (sofá) de la sala. La sala tiene un layout fijo:
+// módulos "pareja" (1.50m, base 2 personas) y "trío" (2.00m, base 3
+// personas). Un número limitado de piezas auxiliares (0.50m, ver
+// Setting "auxiliary_module_count") puede añadirse a UN módulo para sumarle
+// 1 persona — nunca crean un cupo independiente.
+enum VenueModuleType {
+  COUPLE
+  TRIO
+}
+
 enum NotificationChannel {
   EMAIL
   WHATSAPP
@@ -147,6 +157,43 @@ model TicketType {
 }
 
 // ---------------------------------------------------------------------------
+// Layout físico de la sala (módulos de asiento)
+// ---------------------------------------------------------------------------
+
+model VenueModule {
+  id           String          @id @default(cuid())
+  type         VenueModuleType
+  label        String // "Módulo pareja 1", "Módulo trío A"...
+  baseCapacity Int // 2 (pareja) o 3 (trío), sin auxiliar
+  sortOrder    Int             @default(0)
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  assignments ReservationModuleAssignment[]
+
+  @@map("venue_modules")
+}
+
+// Qué módulo(s) ocupa una reserva para una función dada, y si consumió una
+// de las piezas auxiliares compartidas. Se deriva siempre de las reservas
+// activas (igual que el resto de la disponibilidad) — nunca se "libera"
+// manualmente, desaparece solo cuando la reserva deja de contar (cancelada,
+// expirada) porque la fila completa se borra en cascada con la reserva.
+model ReservationModuleAssignment {
+  id            String      @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  venueModuleId String
+  venueModule   VenueModule @relation(fields: [venueModuleId], references: [id])
+  seatsOccupied Int // baseCapacity, o baseCapacity + 1 si usesAuxiliary
+  usesAuxiliary Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  @@map("reservation_module_assignments")
+}
+
+// ---------------------------------------------------------------------------
 // Customers & Reservations
 // ---------------------------------------------------------------------------
 
@@ -196,11 +243,12 @@ model Reservation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items         ReservationItem[]
-  payments      Payment[]
-  statusHistory ReservationStatusHistory[]
-  checkIn       CheckIn?
-  notifications Notification[]
+  items             ReservationItem[]
+  payments          Payment[]
+  statusHistory     ReservationStatusHistory[]
+  checkIn           CheckIn?
+  notifications     Notification[]
+  moduleAssignments ReservationModuleAssignment[]
 
   @@index([showtimeId, status])
   @@index([status, expiresAt])

@@ -34,7 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function ShowtimesPage() {
   const [showtimes, setShowtimes] = useState<ShowtimeRow[]>([]);
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [form, setForm] = useState({ movieId: "", date: "", time: "19:00", capacity: 15 });
+  const [form, setForm] = useState({ movieId: "", date: "", time: "19:00", capacity: 16 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -57,7 +57,7 @@ export default function ShowtimesPage() {
         capacity: Number(form.capacity),
         status: "DRAFT",
       });
-      setForm({ movieId: "", date: "", time: "19:00", capacity: 15 });
+      setForm({ movieId: "", date: "", time: "19:00", capacity: 16 });
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No pudimos crear la función.");

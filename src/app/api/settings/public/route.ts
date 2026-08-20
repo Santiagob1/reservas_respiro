@@ -19,6 +19,10 @@ export async function GET() {
       reservationHoldMinutes: settings.reservation_hold_minutes,
       instagramUrl: settings.instagram_url,
       aboutUsText: settings.about_us_text,
+      paymentMode: settings.payment_mode,
+      paymentTransferKey: settings.payment_transfer_key,
+      paymentTransferInstructions: settings.payment_transfer_instructions,
+      cashReservationHoldHours: settings.cash_reservation_hold_hours,
     });
   } catch (error) {
     return handleApiError(error);
