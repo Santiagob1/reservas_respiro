@@ -1,0 +1,336 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // DATABASE_URL: conexión pooled (host con "-pooler") — la usa la app en runtime.
+  url       = env("DATABASE_URL")
+  // DIRECT_URL: conexión directa (sin pooler) — la usa el CLI de Prisma para migraciones.
+  // En desarrollo local (Docker) puede apuntar a la misma URL que DATABASE_URL.
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum AdminRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum ShowtimeStatus {
+  DRAFT
+  PUBLISHED
+  SOLD_OUT
+  BOOKING_CLOSED
+  CANCELLED
+  FINISHED
+}
+
+enum ReservationStatus {
+  PENDING_PAYMENT
+  PAYMENT_APPROVED
+  CONFIRMED
+  CHECKED_IN
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  ONLINE
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  FAILED
+  EXPIRED
+  REFUNDED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// ---------------------------------------------------------------------------
+// Core catalog
+// ---------------------------------------------------------------------------
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(STAFF)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs           AuditLog[]
+  paymentsConfirmed   Payment[]                 @relation("PaymentConfirmedBy")
+  statusChanges       ReservationStatusHistory[]
+  checkIns            CheckIn[]
+  cancelledReservations Reservation[]           @relation("ReservationCancelledBy")
+
+  @@map("admin_users")
+}
+
+model Movie {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  posterUrl       String?
+  bannerUrl       String?
+  durationMinutes Int
+  genre           String
+  rating          String
+  trailerUrl      String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  showtimes Showtime[]
+
+  @@map("movies")
+}
+
+model Showtime {
+  id            String         @id @default(cuid())
+  movieId       String
+  movie         Movie          @relation(fields: [movieId], references: [id])
+  startsAt      DateTime // instante UTC del inicio de función (derivado de fecha+hora America/Bogota)
+  capacity      Int
+  status        ShowtimeStatus @default(DRAFT)
+  weekPublished Boolean        @default(false) // pertenece a una semana ya publicada
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  reservations Reservation[]
+
+  @@index([startsAt])
+  @@index([status])
+  @@map("showtimes")
+}
+
+model TicketType {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Int // en pesos COP, entero
+  includes    String[] // lista de items incluidos
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reservationItems ReservationItem[]
+
+  @@map("ticket_types")
+}
+
+// ---------------------------------------------------------------------------
+// Customers & Reservations
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String   @id @default(cuid())
+  fullName  String
+  whatsapp  String
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@index([whatsapp])
+  @@index([email])
+  @@map("customers")
+}
+
+model Reservation {
+  id         String            @id @default(cuid())
+  code       String            @unique
+  customerId String
+  customer   Customer          @relation(fields: [customerId], references: [id])
+  showtimeId String
+  showtime   Showtime          @relation(fields: [showtimeId], references: [id])
+
+  adults   Int
+  children Int
+
+  totalAmount Int
+  status      ReservationStatus @default(PENDING_PAYMENT)
+  source      String            @default("WEB") // WEB | ADMIN_MANUAL | WHATSAPP | PHONE | WALK_IN
+
+  expiresAt DateTime?
+
+  qrToken String? @unique
+
+  cancelledAt   DateTime?
+  cancelReason  String?
+  cancelledById String?
+  cancelledBy   AdminUser? @relation("ReservationCancelledBy", fields: [cancelledById], references: [id])
+
+  rescheduledFromId String?
+  rescheduledFrom   Reservation?  @relation("ReservationReschedule", fields: [rescheduledFromId], references: [id])
+  rescheduledTo     Reservation[] @relation("ReservationReschedule")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items         ReservationItem[]
+  payments      Payment[]
+  statusHistory ReservationStatusHistory[]
+  checkIn       CheckIn?
+  notifications Notification[]
+
+  @@index([showtimeId, status])
+  @@index([status, expiresAt])
+  @@map("reservations")
+}
+
+model ReservationItem {
+  id            String   @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  ticketTypeId  String
+  ticketType    TicketType  @relation(fields: [ticketTypeId], references: [id])
+
+  ticketTypeName String // snapshot del nombre al momento de la reserva
+  quantity       Int
+  unitPrice      Int // snapshot histórico del precio
+  total          Int
+
+  @@map("reservation_items")
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id            String        @id @default(cuid())
+  reservationId String
+  reservation   Reservation   @relation(fields: [reservationId], references: [id])
+
+  method   PaymentMethod
+  status   PaymentStatus @default(PENDING)
+  amount   Int
+
+  providerReference String? // referencia enviada a la pasarela
+  providerTxId      String? // id de transacción en la pasarela
+  rawResponse       Json?
+
+  confirmedById String?
+  confirmedBy   AdminUser? @relation("PaymentConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime?
+  cashReference String? // referencia opcional para efectivo/transferencia
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions PaymentTransaction[]
+
+  @@index([reservationId])
+  @@map("payments")
+}
+
+// Log de eventos de la pasarela (webhooks) para garantizar idempotencia.
+model PaymentTransaction {
+  id                   String   @id @default(cuid())
+  paymentId            String
+  payment              Payment  @relation(fields: [paymentId], references: [id])
+  provider             String
+  providerTransactionId String
+  eventType            String
+  payload              Json
+  receivedAt           DateTime @default(now())
+
+  @@unique([provider, providerTransactionId, eventType])
+  @@map("payment_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// History / Operations
+// ---------------------------------------------------------------------------
+
+model ReservationStatusHistory {
+  id            String            @id @default(cuid())
+  reservationId String
+  reservation   Reservation       @relation(fields: [reservationId], references: [id])
+  fromStatus    ReservationStatus?
+  toStatus      ReservationStatus
+  reason        String?
+  changedById   String?
+  changedBy     AdminUser?        @relation(fields: [changedById], references: [id])
+  changedAt     DateTime          @default(now())
+
+  @@map("reservation_status_history")
+}
+
+model CheckIn {
+  id            String      @id @default(cuid())
+  reservationId String      @unique
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  checkedInAt   DateTime    @default(now())
+  checkedInById String?
+  checkedInBy   AdminUser?  @relation(fields: [checkedInById], references: [id])
+  method        String      @default("QR")
+
+  @@map("check_ins")
+}
+
+model Notification {
+  id            String              @id @default(cuid())
+  reservationId String
+  reservation   Reservation         @relation(fields: [reservationId], references: [id])
+  channel       NotificationChannel
+  event         String // RESERVATION_CONFIRMED | REMINDER_24H | REMINDER_2H | ...
+  status        NotificationStatus  @default(PENDING)
+  payload       Json?
+  error         String?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  @@map("notifications")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  details     Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

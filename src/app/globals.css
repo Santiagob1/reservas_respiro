@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --background: #1b120c;
+  --foreground: #f4e9d8;
+
+  --color-ink: #1b120c;
+  --color-ink-soft: #241a12;
+  --color-ink-card: #2a1e14;
+  --color-cream: #f4e9d8;
+  --color-cream-dim: #d9c9b3;
+  --color-gold: #d4a556;
+  --color-gold-soft: #e8c988;
+  --color-gold-dim: #8a6a3c;
+  --color-muted: #a68a6c;
+  --color-line: #3d2c1e;
+
+  --color-success: #6ba368;
+  --color-warning: #d99a3d;
+  --color-danger: #c05a4a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-card: var(--color-ink-card);
+  --color-cream: var(--color-cream);
+  --color-cream-dim: var(--color-cream-dim);
+  --color-gold: var(--color-gold);
+  --color-gold-soft: var(--color-gold-soft);
+  --color-gold-dim: var(--color-gold-dim);
+  --color-muted: var(--color-muted);
+  --color-line: var(--color-line);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+
+  --font-display: var(--font-cormorant), "Georgia", serif;
+  --font-sans: var(--font-inter), "Inter", sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+::selection {
+  background: var(--color-gold);
+  color: var(--color-ink);
+}
+
+/* Focus visibility for accessibility (sección 75) */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}

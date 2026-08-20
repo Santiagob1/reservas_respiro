@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cine-respiro-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cine
+      POSTGRES_PASSWORD: cine_dev_password
+      POSTGRES_DB: cine_respiro
+    ports:
+      - "5433:5432"
+    volumes:
+      - cine_respiro_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cine -d cine_respiro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cine-respiro-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://cine:cine_dev_password@postgres:5432/cine_respiro
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cine-respiro-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://cine:cine_dev_password@postgres:5432/cine_respiro
+    command: sh -c "npx tsx scripts/worker.ts"
+
+volumes:
+  cine_respiro_pgdata:
