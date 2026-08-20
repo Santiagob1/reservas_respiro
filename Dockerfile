@@ -1,4 +1,9 @@
 # syntax=docker/dockerfile:1
+#
+# Este Dockerfile requiere `output: "standalone"` en next.config.ts, que está
+# desactivado por defecto porque el proyecto se despliega en Vercel (ese modo
+# rompe el build de Vercel). Si vas a self-hostear con este Dockerfile,
+# reactívalo primero en next.config.ts.
 
 FROM node:22-alpine AS base
 WORKDIR /app

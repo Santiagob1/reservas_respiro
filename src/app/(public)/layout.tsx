@@ -2,6 +2,12 @@ import { Header } from "@/components/public/Header";
 import { Footer } from "@/components/public/Footer";
 import { getSettings } from "@/server/services/settings.service";
 
+// Todo el sitio público lee datos que cambian en tiempo real (disponibilidad,
+// configuración editable desde el admin). Sin esto, Next.js congelaría la
+// home y otras páginas sin parámetros dinámicos como HTML estático generado
+// una sola vez en el build, y los cupos mostrados quedarían desactualizados.
+export const dynamic = "force-dynamic";
+
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettings();
 
