@@ -22,6 +22,7 @@ export async function GET() {
       paymentMode: settings.payment_mode,
       paymentTransferKey: settings.payment_transfer_key,
       paymentTransferInstructions: settings.payment_transfer_instructions,
+      paymentQrUrl: settings.payment_qr_url,
       cashReservationHoldHours: settings.cash_reservation_hold_hours,
     });
   } catch (error) {

@@ -115,6 +115,16 @@ export function StepPayment({
         </div>
 
         <div className="rounded-2xl border border-line bg-ink-card p-5">
+          {paymentSettings.paymentQrUrl && (
+            <div className="mb-4 flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={paymentSettings.paymentQrUrl}
+                alt="Código QR para transferir"
+                className="h-56 w-56 rounded-xl bg-cream object-contain p-2"
+              />
+            </div>
+          )}
           <p className="text-xs uppercase tracking-widest text-gold">Transfiere a</p>
           <div className="mt-1 flex items-center gap-3">
             <p className="font-display text-2xl text-cream">{paymentSettings.paymentTransferKey}</p>

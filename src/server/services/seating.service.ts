@@ -107,6 +107,66 @@ export async function getShowtimeSeatingState(
   };
 }
 
+export interface ShowtimeSeatingModuleDetail {
+  id: string;
+  label: string;
+  type: "COUPLE" | "TRIO";
+  baseCapacity: number;
+  occupied: boolean;
+  seatsOccupied: number | null;
+  usesAuxiliary: boolean;
+  reservation: { code: string; customerName: string; status: string } | null;
+}
+
+/** Vista completa (para el panel admin) de qué reserva ocupa cada módulo en una función. */
+export async function getShowtimeSeatingDetail(
+  showtimeId: string,
+  client: Client = prisma
+): Promise<{ modules: ShowtimeSeatingModuleDetail[]; remainingAux: number; auxCount: number }> {
+  const [modules, auxCount, assignments] = await Promise.all([
+    getActiveVenueModules(client),
+    getSetting("auxiliary_module_count"),
+    client.reservationModuleAssignment.findMany({
+      where: {
+        reservation: {
+          showtimeId,
+          OR: [
+            { status: { in: ["PAYMENT_APPROVED", "CONFIRMED", "CHECKED_IN"] } },
+            { status: "PENDING_PAYMENT", expiresAt: null },
+            { status: "PENDING_PAYMENT", expiresAt: { gt: now() } },
+          ],
+        },
+      },
+      include: { reservation: { include: { customer: true } } },
+    }),
+  ]);
+
+  const byModuleId = new Map(assignments.map((a) => [a.venueModuleId, a]));
+  const usedAux = assignments.filter((a) => a.usesAuxiliary).length;
+
+  const detail: ShowtimeSeatingModuleDetail[] = modules.map((m) => {
+    const assignment = byModuleId.get(m.id);
+    return {
+      id: m.id,
+      label: m.label,
+      type: m.type,
+      baseCapacity: m.baseCapacity,
+      occupied: Boolean(assignment),
+      seatsOccupied: assignment?.seatsOccupied ?? null,
+      usesAuxiliary: assignment?.usesAuxiliary ?? false,
+      reservation: assignment
+        ? {
+            code: assignment.reservation.code,
+            customerName: assignment.reservation.customer.fullName,
+            status: assignment.reservation.status,
+          }
+        : null,
+    };
+  });
+
+  return { modules: detail, remainingAux: Math.max(0, auxCount - usedAux), auxCount };
+}
+
 /**
  * Busca la mejor combinación de módulos libres (+ auxiliares) para sentar a
  * `partySize` personas juntas. Explora todas las combinaciones posibles (el

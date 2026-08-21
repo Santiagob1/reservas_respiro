@@ -16,6 +16,7 @@ export interface PublicPaymentSettings {
   paymentMode: "transfer" | "online";
   paymentTransferKey: string;
   paymentTransferInstructions: string;
+  paymentQrUrl: string;
   whatsapp: string;
 }
 

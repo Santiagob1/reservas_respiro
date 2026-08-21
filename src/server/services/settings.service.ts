@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = {
   payment_transfer_key: "",
   payment_transfer_instructions:
     "Transfiere el valor total a la llave/cuenta indicada y envía el comprobante por WhatsApp con tu código de reserva para confirmarla.",
+  payment_qr_url: "",
 } as const;
 
 export type SettingsMap = typeof DEFAULT_SETTINGS;

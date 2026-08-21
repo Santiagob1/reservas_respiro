@@ -74,15 +74,19 @@ async function sendEmailNotification(reservationId: string, event: NotificationE
   });
   if (!reservation) return;
 
+  const { getSetting } = await import("@/server/services/settings.service");
+  const businessEmail = await getSetting("business_sales_email");
+
   if (event === "RESERVATION_CONFIRMED") {
     await sendEmail({
       to: reservation.customer.email,
       subject: `Tu reserva está confirmada — ${reservation.code}`,
       html: customerConfirmationEmail(reservation),
+      // Si el cliente responde el correo, que le llegue al negocio (el
+      // remitente suele ser una dirección técnica que nadie revisa).
+      replyTo: businessEmail || undefined,
     });
   } else if (event === "ADMIN_NEW_SALE") {
-    const { getSetting } = await import("@/server/services/settings.service");
-    const businessEmail = await getSetting("business_sales_email");
     await sendEmail({
       to: businessEmail || null,
       subject: `Nueva venta — ${reservation.code} (${formatCOP(reservation.totalAmount)})`,
@@ -95,7 +99,7 @@ async function sendEmailNotification(reservationId: string, event: NotificationE
   }
 }
 
-async function sendEmail(params: { to: string | null; subject: string; html: string }) {
+async function sendEmail(params: { to: string | null; subject: string; html: string; replyTo?: string }) {
   if (!params.to) {
     console.log(`[email] destinatario no configurado, se omite envío: "${params.subject}"`);
     return;
@@ -105,17 +109,23 @@ async function sendEmail(params: { to: string | null; subject: string; html: str
   const apiKey = process.env.RESEND_API_KEY;
 
   if (provider !== "resend" || !apiKey) {
-    console.log(`[email:console] para=${params.to} asunto="${params.subject}"`);
+    console.log(`[email:console] RESEND_API_KEY no configurada — para=${params.to} asunto="${params.subject}"`);
     return;
   }
 
   const { Resend } = await import("resend");
   const resend = new Resend(apiKey);
+  // No se puede enviar "from" una dirección @gmail.com (o cualquier dominio
+  // que no esté verificado en Resend) — Resend la rechaza. Por defecto se usa
+  // su remitente de pruebas (funciona sin configurar nada); para un remitente
+  // con tu propia marca, verifica un dominio propio en resend.com/domains y
+  // pon EMAIL_FROM="Cine Respiro <reservas@tudominio.com>".
   const from = process.env.EMAIL_FROM || "Cine Respiro <onboarding@resend.dev>";
 
   const { error } = await resend.emails.send({
     from,
     to: params.to,
+    replyTo: params.replyTo,
     subject: params.subject,
     html: params.html,
   });
