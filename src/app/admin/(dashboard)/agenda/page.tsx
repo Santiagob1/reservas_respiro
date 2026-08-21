@@ -6,6 +6,7 @@ import { apiGet } from "@/lib/api-client";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { SeatingMap } from "@/components/admin/SeatingMap";
 import { formatCOP } from "@/components/public/wizard/types";
+import { zonedDayRangeToUtc } from "@/lib/timezone";
 
 interface ShowtimeRow {
   id: string;
@@ -75,9 +76,10 @@ export default function AdminAgendaPage() {
 
   useEffect(() => {
     setLoading(true);
+    const { from, to } = zonedDayRangeToUtc(selectedKey);
     const qs = new URLSearchParams({
-      from: `${selectedKey}T00:00:00`,
-      to: `${selectedKey}T23:59:59`,
+      from: from.toISOString(),
+      to: to.toISOString(),
       status: ACTIVE_STATUSES,
       pageSize: "100",
     });

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { inputClass } from "@/components/admin/formStyles";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { SeatingMap } from "@/components/admin/SeatingMap";
+import { toDateTimeParts } from "@/lib/timezone";
 
 interface Movie {
   id: string;
@@ -40,6 +41,10 @@ export default function ShowtimesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ movieId: "", date: "", time: "", capacity: 16 });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   function load() {
     const from = new Date().toISOString();
@@ -93,6 +98,42 @@ export default function ShowtimesPage() {
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No pudimos eliminar la función.");
+    }
+  }
+
+  function startEdit(s: ShowtimeRow) {
+    const { date, time } = toDateTimeParts(new Date(s.startsAt));
+    setEditingId(s.id);
+    setEditError(null);
+    setEditForm({ movieId: s.movie.id, date, time, capacity: s.capacity });
+    // La película asignada puede haberse desactivado después de programar la función;
+    // igual debe verse en el selector para no perderla al editar otro campo.
+    setMovies((prev) => (prev.some((m) => m.id === s.movie.id) ? prev : [...prev, { ...s.movie, active: false }]));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditError(null);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    setEditLoading(true);
+    setEditError(null);
+    try {
+      await apiPatch(`/api/admin/showtimes/${editingId}`, {
+        movieId: editForm.movieId,
+        date: editForm.date,
+        time: editForm.time,
+        capacity: Number(editForm.capacity),
+      });
+      setEditingId(null);
+      load();
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "No pudimos guardar los cambios.");
+    } finally {
+      setEditLoading(false);
     }
   }
 
@@ -174,6 +215,9 @@ export default function ShowtimesPage() {
                       <Button variant="ghost" onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}>
                         {expandedId === s.id ? "Ocultar módulos" : "Ver módulos"}
                       </Button>
+                      <Button variant="ghost" onClick={() => (editingId === s.id ? cancelEdit() : startEdit(s))}>
+                        {editingId === s.id ? "Cerrar edición" : "Editar"}
+                      </Button>
                       {s.status === "DRAFT" && (
                         <Button variant="secondary" onClick={() => publish(s.id)}>
                           Publicar
@@ -189,13 +233,66 @@ export default function ShowtimesPage() {
                           Cancelar
                         </Button>
                       )}
-                      {!s.hasReservationHistory && (
+                      {s.hasReservationHistory ? (
+                        <span
+                          className="cursor-not-allowed text-xs text-muted"
+                          title="No se puede eliminar: esta función tiene reservas asociadas (incluye canceladas, que se conservan como historial). Usa Cancelar en su lugar."
+                        >
+                          Eliminar (bloqueado)
+                        </span>
+                      ) : (
                         <Button variant="ghost" onClick={() => deleteShowtime(s.id)}>
                           Eliminar
                         </Button>
                       )}
                     </div>
                   </div>
+                  {editingId === s.id && (
+                    <form onSubmit={saveEdit} className="mt-4 grid gap-3 rounded-xl border border-line bg-ink p-4 sm:grid-cols-5">
+                      <select
+                        value={editForm.movieId}
+                        onChange={(e) => setEditForm({ ...editForm, movieId: e.target.value })}
+                        required
+                        className={inputClass}
+                      >
+                        {movies.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.title}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={editForm.date}
+                        onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                        required
+                        className={inputClass}
+                      />
+                      <input
+                        type="time"
+                        value={editForm.time}
+                        onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                        required
+                        className={inputClass}
+                      />
+                      <input
+                        type="number"
+                        value={editForm.capacity}
+                        onChange={(e) => setEditForm({ ...editForm, capacity: Number(e.target.value) })}
+                        required
+                        className={inputClass}
+                      />
+                      <div className="flex gap-2">
+                        <Button type="submit" disabled={editLoading}>
+                          Guardar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={cancelEdit}>
+                          Cancelar
+                        </Button>
+                      </div>
+                      {editError && <p className="text-sm text-danger sm:col-span-5">{editError}</p>}
+                    </form>
+                  )}
                   {expandedId === s.id && (
                     <div className="mt-4">
                       <SeatingMap showtimeId={s.id} />

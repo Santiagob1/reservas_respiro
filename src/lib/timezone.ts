@@ -17,6 +17,21 @@ export function now(): Date {
   return new Date();
 }
 
+/**
+ * Convierte un día calendario (YYYY-MM-DD) en la zona del cine a su rango
+ * [00:00, 23:59:59.999] expresado en instantes UTC. Úsalo para filtrar por
+ * "día" en vez de construir strings de fecha sin offset: esos strings los
+ * interpreta `new Date()` en la zona horaria del proceso que los parsea (el
+ * navegador del admin en desarrollo, pero UTC en Vercel), lo que descuadra
+ * funciones nocturnas que cruzan la medianoche UTC.
+ */
+export function zonedDayRangeToUtc(dateKey: string): { from: Date; to: Date } {
+  return {
+    from: fromZonedTime(`${dateKey}T00:00:00.000`, CINEMA_TIMEZONE),
+    to: fromZonedTime(`${dateKey}T23:59:59.999`, CINEMA_TIMEZONE),
+  };
+}
+
 export function toCinemaTime(date: Date): Date {
   return toZonedTime(date, CINEMA_TIMEZONE);
 }
