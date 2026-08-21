@@ -21,6 +21,9 @@ export const DEFAULT_SETTINGS = {
   privacy_policy_url: "",
   cancellation_policy_url: "",
   instagram_url: "",
+  tiktok_url: "https://www.tiktok.com/@cafe.respiro.armenia",
+  location_url: "https://maps.app.goo.gl/aEezKSuhd2vFm6Z26",
+  menu_url: "https://app.treggio.co/cafe-respiro-armenia",
   about_us_text:
     "Cine Respiro nació de una idea simple: el cine se disfruta mejor de cerca. Una sola sala, cupos limitados y una función al día para que cada proyección se sienta íntima — como ver una película en la sala de tu casa, pero con la pantalla grande, buen café y buena compañía.",
   business_sales_email: process.env.BUSINESS_SALES_EMAIL ?? "",

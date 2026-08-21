@@ -4,6 +4,7 @@ import { zonedDateTimeToUtc, toDateTimeParts } from "@/lib/timezone";
 import {
   CapacityBelowCommittedException,
   MovieHasReservationsException,
+  ShowtimeHasReservationsException,
   ShowtimeNotFoundException,
   ValidationException,
 } from "@/server/domain/errors";
@@ -121,6 +122,22 @@ export async function closeBooking(id: string) {
 export async function cancelShowtime(id: string) {
   await getShowtimeById(id);
   return prisma.showtime.update({ where: { id }, data: { status: "CANCELLED" } });
+}
+
+/**
+ * Borra la función por completo (no solo cancelarla). Solo se permite si
+ * NUNCA tuvo ninguna reserva (ni siquiera canceladas/expiradas) — así se
+ * conserva el historial real de ventas, y solo se pueden borrar los errores
+ * de programación (película equivocada, fecha mal puesta) antes de que
+ * alguien alcance a reservar.
+ */
+export async function deleteShowtime(id: string) {
+  await getShowtimeById(id);
+  const totalReservations = await prisma.reservation.count({ where: { showtimeId: id } });
+  if (totalReservations > 0) {
+    throw new ShowtimeHasReservationsException(totalReservations);
+  }
+  await prisma.showtime.delete({ where: { id } });
 }
 
 export async function countActiveReservations(showtimeId: string): Promise<number> {

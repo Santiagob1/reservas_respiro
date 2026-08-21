@@ -22,6 +22,9 @@ interface Settings {
   privacy_policy_url: string;
   cancellation_policy_url: string;
   instagram_url: string;
+  tiktok_url: string;
+  location_url: string;
+  menu_url: string;
   about_us_text: string;
   business_sales_email: string;
   payment_mode: "transfer" | "online";
@@ -127,6 +130,30 @@ export default function SettingsPage() {
             value={settings.instagram_url}
             onChange={(e) => set("instagram_url", e.target.value)}
             placeholder="https://instagram.com/cinerespiro"
+            className={inputClass}
+          />
+        </Field>
+        <Field label="TikTok (URL, opcional)">
+          <input
+            value={settings.tiktok_url}
+            onChange={(e) => set("tiktok_url", e.target.value)}
+            placeholder="https://www.tiktok.com/@..."
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Ubicación en Google Maps (URL, opcional)">
+          <input
+            value={settings.location_url}
+            onChange={(e) => set("location_url", e.target.value)}
+            placeholder="https://maps.app.goo.gl/..."
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Carta / menú (URL, opcional)">
+          <input
+            value={settings.menu_url}
+            onChange={(e) => set("menu_url", e.target.value)}
+            placeholder="https://app.treggio.co/..."
             className={inputClass}
           />
         </Field>

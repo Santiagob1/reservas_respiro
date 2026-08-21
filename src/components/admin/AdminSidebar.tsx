@@ -6,6 +6,7 @@ import { apiPost } from "@/lib/api-client";
 
 const LINKS = [
   { href: "/admin/dashboard", label: "Dashboard" },
+  { href: "/admin/agenda", label: "Agenda" },
   { href: "/admin/reservas", label: "Reservas" },
   { href: "/admin/check-in", label: "Control de ingreso" },
   { href: "/admin/funciones", label: "Funciones" },

@@ -114,6 +114,16 @@ export class MovieHasReservationsException extends DomainError {
   }
 }
 
+export class ShowtimeHasReservationsException extends DomainError {
+  constructor(count: number) {
+    super(
+      "SHOWTIME_DELETE_BLOCKED",
+      `No puedes eliminar esta función porque tiene ${count} reserva${count === 1 ? "" : "s"} asociada${count === 1 ? "" : "s"} (incluye canceladas y expiradas, que se conservan como historial). Cancélala en su lugar.`,
+      409
+    );
+  }
+}
+
 export class AlreadyCheckedInException extends DomainError {
   constructor(checkedInAt: Date) {
     super(
