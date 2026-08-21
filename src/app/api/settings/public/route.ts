@@ -1,6 +1,8 @@
 import { ok, handleApiError } from "@/lib/api-response";
 import { getSettings } from "@/server/services/settings.service";
 
+export const dynamic = "force-dynamic";
+
 /** Solo expone la configuración necesaria para el sitio público (nunca secretos). */
 export async function GET() {
   try {

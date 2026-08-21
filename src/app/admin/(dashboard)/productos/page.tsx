@@ -88,11 +88,11 @@ export default function TicketTypesPage() {
                 <p className="text-sm text-gold">{formatCOP(t.price)}</p>
                 {t.includes.length > 0 && <p className="text-xs text-muted">Incluye: {t.includes.join(", ")}</p>}
               </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => startEdit(t)}>
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => startEdit(t)}>
                   Editar
                 </Button>
-                <Button variant="secondary" onClick={() => toggleActive(t)}>
+                <Button variant="secondary" size="sm" onClick={() => toggleActive(t)}>
                   {t.active ? "Desactivar" : "Activar"}
                 </Button>
               </div>

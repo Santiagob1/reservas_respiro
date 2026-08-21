@@ -4,6 +4,8 @@ import { getShowtimeAvailability } from "@/server/services/availability.service"
 import { toPublicShowtimeDto } from "@/server/dto/showtime.dto";
 import { getSetting } from "@/server/services/settings.service";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

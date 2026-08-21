@@ -1,6 +1,8 @@
 import { ok, handleApiError } from "@/lib/api-response";
 import { listMovies } from "@/server/services/movie.service";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const movies = await listMovies({ onlyActive: true });
