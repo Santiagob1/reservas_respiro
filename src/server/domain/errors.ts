@@ -114,6 +114,16 @@ export class MovieHasReservationsException extends DomainError {
   }
 }
 
+export class MovieHasShowtimesException extends DomainError {
+  constructor(count: number) {
+    super(
+      "MOVIE_DELETE_BLOCKED",
+      `No puedes eliminar esta película porque tiene ${count} función${count === 1 ? "" : "es"} programada${count === 1 ? "" : "s"} (pasadas o futuras). Desactívala en su lugar para que deje de aparecer disponible.`,
+      409
+    );
+  }
+}
+
 export class ShowtimeHasReservationsException extends DomainError {
   constructor(count: number) {
     super(

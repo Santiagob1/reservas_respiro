@@ -21,6 +21,7 @@ interface ShowtimeRow {
   weekPublished: boolean;
   movie: { id: string; title: string };
   availability: { available: number; confirmed: number; pending: number };
+  hasReservationHistory: boolean;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -188,7 +189,7 @@ export default function ShowtimesPage() {
                           Cancelar
                         </Button>
                       )}
-                      {s.availability.confirmed === 0 && s.availability.pending === 0 && (
+                      {!s.hasReservationHistory && (
                         <Button variant="ghost" onClick={() => deleteShowtime(s.id)}>
                           Eliminar
                         </Button>
