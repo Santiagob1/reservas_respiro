@@ -118,14 +118,14 @@ export default function MoviesPage() {
                   {m.durationMinutes} min · {m.genre} · {m.rating}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => startEdit(m)}>
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => startEdit(m)}>
                   Editar
                 </Button>
-                <Button variant="secondary" onClick={() => toggleActive(m)}>
+                <Button variant="secondary" size="sm" onClick={() => toggleActive(m)}>
                   {m.active ? "Desactivar" : "Activar"}
                 </Button>
-                <Button variant="ghost" onClick={() => deleteMovie(m)}>
+                <Button variant="ghost" size="sm" onClick={() => deleteMovie(m)}>
                   Eliminar
                 </Button>
               </div>

@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { apiGet } from "@/lib/api-client";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { SeatingMap } from "@/components/admin/SeatingMap";
 import { formatCOP } from "@/components/public/wizard/types";
 import { zonedDayRangeToUtc } from "@/lib/timezone";
+
+const SHOWTIME_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Borrador",
+  PUBLISHED: "Publicada",
+  SOLD_OUT: "Agotada",
+  BOOKING_CLOSED: "Reservas cerradas",
+  CANCELLED: "Cancelada",
+  FINISHED: "Finalizada",
+};
 
 interface ShowtimeRow {
   id: string;
@@ -57,10 +67,17 @@ function buildWindow(todayKey: string, offset: number) {
   });
 }
 
-export default function AdminAgendaPage() {
+function AdminAgendaContent() {
+  const searchParams = useSearchParams();
+  const requestedDate = searchParams.get("date");
   const todayKey = useMemo(() => toDateKey(new Date()), []);
-  const [offset, setOffset] = useState(0);
-  const [selectedKey, setSelectedKey] = useState(todayKey);
+  const initialKey = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : todayKey;
+  const initialOffset = useMemo(
+    () => Math.round((parseDateKey(initialKey).getTime() - parseDateKey(todayKey).getTime()) / 86400000),
+    [initialKey, todayKey]
+  );
+  const [offset, setOffset] = useState(initialOffset);
+  const [selectedKey, setSelectedKey] = useState(initialKey);
   const [showtimes, setShowtimes] = useState<ShowtimeRow[]>([]);
   const [reservations, setReservations] = useState<ReservationListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +190,7 @@ export default function AdminAgendaPage() {
                   {new Date(s.startsAt).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })}
                 </p>
               </div>
-              <StatusBadge status={s.status === "PUBLISHED" ? "CONFIRMED" : "PENDING_PAYMENT"} />
+              <span className="text-xs text-muted">{SHOWTIME_STATUS_LABEL[s.status] ?? s.status}</span>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-3 text-center text-sm">
               <div>
@@ -233,5 +250,13 @@ export default function AdminAgendaPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AdminAgendaPage() {
+  return (
+    <Suspense>
+      <AdminAgendaContent />
+    </Suspense>
   );
 }
