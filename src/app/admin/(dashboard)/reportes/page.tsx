@@ -5,7 +5,7 @@ import { apiGet } from "@/lib/api-client";
 import { formatCOP } from "@/components/public/wizard/types";
 
 interface Report {
-  byDay: { date: string; reservations: number; revenue: number; ticketsSold: number; capacity: number }[];
+  byDay: { date: string; reservations: number; revenue: number; ticketsSold: number }[];
   byPaymentMethod: Record<string, number>;
   totals: { reservations: number; revenue: number; ticketsSold: number; averageTicket: number };
 }
