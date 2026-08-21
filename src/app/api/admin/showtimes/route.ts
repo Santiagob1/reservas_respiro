@@ -3,6 +3,7 @@ import { ok, handleApiError } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/require-admin";
 import { createShowtime, listShowtimes } from "@/server/services/showtime.service";
 import { getAvailabilityForShowtimes } from "@/server/services/availability.service";
+import { prisma } from "@/lib/prisma";
 import { recordAudit } from "@/server/services/audit.service";
 
 const createSchema = z.object({
@@ -24,7 +25,20 @@ export async function GET(req: Request) {
       to: to ? new Date(to) : undefined,
     });
     const availability = await getAvailabilityForShowtimes(showtimes.map((s) => s.id));
-    return ok(showtimes.map((s) => ({ ...s, availability: availability[s.id] })));
+    const reservationCounts = await prisma.reservation.groupBy({
+      by: ["showtimeId"],
+      where: { showtimeId: { in: showtimes.map((s) => s.id) } },
+      _count: { _all: true },
+    });
+    const countByShowtime = new Map(reservationCounts.map((r) => [r.showtimeId, r._count._all]));
+
+    return ok(
+      showtimes.map((s) => ({
+        ...s,
+        availability: availability[s.id],
+        hasReservationHistory: (countByShowtime.get(s.id) ?? 0) > 0,
+      }))
+    );
   } catch (error) {
     return handleApiError(error);
   }

@@ -91,6 +91,17 @@ export default function MoviesPage() {
     load();
   }
 
+  async function deleteMovie(m: Movie) {
+    if (!window.confirm(`¿Eliminar "${m.title}" por completo? Solo es posible si nunca tuvo funciones programadas.`)) return;
+    setError(null);
+    try {
+      await apiPost(`/api/admin/movies/${m.id}/delete`, {});
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No pudimos eliminar la película.");
+    }
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
       <div>
@@ -113,6 +124,9 @@ export default function MoviesPage() {
                 </Button>
                 <Button variant="secondary" onClick={() => toggleActive(m)}>
                   {m.active ? "Desactivar" : "Activar"}
+                </Button>
+                <Button variant="ghost" onClick={() => deleteMovie(m)}>
+                  Eliminar
                 </Button>
               </div>
             </div>

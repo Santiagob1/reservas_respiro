@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { formatCOP } from "@/components/public/wizard/types";
 import { inputClass } from "@/components/admin/formStyles";
+import { zonedDayRangeToUtc } from "@/lib/timezone";
 
 interface ReservationListItem {
   id: string;
@@ -41,8 +42,8 @@ function ReservationsList() {
     const qs = new URLSearchParams();
     if (search) qs.set("search", search);
     if (status) qs.set("status", status);
-    if (dateFrom) qs.set("from", `${dateFrom}T00:00:00`);
-    if (dateTo) qs.set("to", `${dateTo}T23:59:59`);
+    if (dateFrom) qs.set("from", zonedDayRangeToUtc(dateFrom).from.toISOString());
+    if (dateTo) qs.set("to", zonedDayRangeToUtc(dateTo).to.toISOString());
     apiGet<{ items: ReservationListItem[]; total: number }>(`/api/admin/reservations?${qs}`)
       .then((res) => {
         setItems(res.items);

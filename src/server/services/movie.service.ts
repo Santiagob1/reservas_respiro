@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ValidationException } from "@/server/domain/errors";
+import { MovieHasShowtimesException, ValidationException } from "@/server/domain/errors";
 
 export interface MovieInput {
   title: string;
@@ -37,6 +37,20 @@ export async function updateMovie(id: string, input: Partial<MovieInput>) {
 
 export async function setMovieActive(id: string, active: boolean) {
   return prisma.movie.update({ where: { id }, data: { active } });
+}
+
+/**
+ * Borra la película por completo. Solo se permite si nunca tuvo ninguna
+ * función programada — así se conserva el historial real (sección 39: "no
+ * eliminar físicamente películas con reservas históricas"). Para una
+ * película ya usada, usa "Desactivar" en su lugar.
+ */
+export async function deleteMovie(id: string) {
+  const showtimeCount = await prisma.showtime.count({ where: { movieId: id } });
+  if (showtimeCount > 0) {
+    throw new MovieHasShowtimesException(showtimeCount);
+  }
+  await prisma.movie.delete({ where: { id } });
 }
 
 function validateMovieInput(input: MovieInput) {
