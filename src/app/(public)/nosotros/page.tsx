@@ -30,6 +30,36 @@ export default async function NosotrosPage() {
             Síguenos en Instagram
           </Link>
         )}
+        {settings.tiktok_url && (
+          <Link
+            href={settings.tiktok_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-line px-5 py-2.5 text-sm text-cream hover:border-gold hover:text-gold"
+          >
+            Síguenos en TikTok
+          </Link>
+        )}
+        {settings.location_url && (
+          <Link
+            href={settings.location_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-line px-5 py-2.5 text-sm text-cream hover:border-gold hover:text-gold"
+          >
+            Cómo llegar
+          </Link>
+        )}
+        {settings.menu_url && (
+          <Link
+            href={settings.menu_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-line px-5 py-2.5 text-sm text-cream hover:border-gold hover:text-gold"
+          >
+            Ver la carta
+          </Link>
+        )}
         <Link
           href="/#agenda"
           className="rounded-full bg-gold px-5 py-2.5 text-sm font-semibold text-ink hover:bg-gold-soft"

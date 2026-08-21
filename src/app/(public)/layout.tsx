@@ -13,7 +13,13 @@ export default async function PublicLayout({ children }: { children: React.React
 
   return (
     <>
-      <Header instagramUrl={settings.instagram_url || undefined} whatsapp={settings.cinema_whatsapp} />
+      <Header
+        instagramUrl={settings.instagram_url || undefined}
+        tiktokUrl={settings.tiktok_url || undefined}
+        locationUrl={settings.location_url || undefined}
+        menuUrl={settings.menu_url || undefined}
+        whatsapp={settings.cinema_whatsapp}
+      />
       <main className="flex-1">{children}</main>
       <Footer
         cinemaName={settings.cinema_name}
@@ -21,6 +27,9 @@ export default async function PublicLayout({ children }: { children: React.React
         email={settings.cinema_email}
         address={settings.cinema_address}
         instagramUrl={settings.instagram_url || undefined}
+        tiktokUrl={settings.tiktok_url || undefined}
+        locationUrl={settings.location_url || undefined}
+        menuUrl={settings.menu_url || undefined}
         termsUrl={settings.terms_url || undefined}
         privacyPolicyUrl={settings.privacy_policy_url || undefined}
         cancellationPolicyUrl={settings.cancellation_policy_url || undefined}

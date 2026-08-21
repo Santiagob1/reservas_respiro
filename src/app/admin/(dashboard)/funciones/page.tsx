@@ -5,6 +5,7 @@ import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/Button";
 import { inputClass } from "@/components/admin/formStyles";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { SeatingMap } from "@/components/admin/SeatingMap";
 
 interface Movie {
   id: string;
@@ -37,6 +38,7 @@ export default function ShowtimesPage() {
   const [form, setForm] = useState({ movieId: "", date: "", time: "19:00", capacity: 16 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function load() {
     const from = new Date().toISOString();
@@ -82,6 +84,17 @@ export default function ShowtimesPage() {
     load();
   }
 
+  async function deleteShowtime(id: string) {
+    if (!window.confirm("¿Eliminar esta función por completo? Solo es posible si nunca tuvo reservas.")) return;
+    setError(null);
+    try {
+      await apiPost(`/api/admin/showtimes/${id}/delete`, {});
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No pudimos eliminar la función.");
+    }
+  }
+
   const draftIds = showtimes.filter((s) => s.status === "DRAFT").map((s) => s.id);
 
   async function publishAllDrafts() {
@@ -89,6 +102,16 @@ export default function ShowtimesPage() {
     await apiPost("/api/admin/showtimes/publish-week", { showtimeIds: draftIds });
     load();
   }
+
+  const groupedByDay = showtimes.reduce<Record<string, ShowtimeRow[]>>((acc, s) => {
+    const dayKey = new Date(s.startsAt).toLocaleDateString("es-CO", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    (acc[dayKey] ??= []).push(s);
+    return acc;
+  }, {});
 
   return (
     <div className="flex flex-col gap-8">
@@ -126,38 +149,63 @@ export default function ShowtimesPage() {
       </form>
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <div className="flex flex-col gap-3">
-        {showtimes.map((s) => (
-          <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-ink-card p-4">
-            <div>
-              <p className="font-display text-lg text-cream">{s.movie.title}</p>
-              <p className="text-sm text-cream-dim">{new Date(s.startsAt).toLocaleString("es-CO")}</p>
-              <p className="text-xs text-muted">
-                {s.availability.confirmed} confirmadas · {s.availability.pending} pendientes ·{" "}
-                {s.availability.available} disponibles de {s.capacity}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={s.status === "DRAFT" ? "PENDING_PAYMENT" : "CONFIRMED"} />
-              <span className="text-xs text-muted">{STATUS_LABEL[s.status] ?? s.status}</span>
-              {s.status === "DRAFT" && (
-                <Button variant="secondary" onClick={() => publish(s.id)}>
-                  Publicar
-                </Button>
-              )}
-              {s.status === "PUBLISHED" && (
-                <Button variant="secondary" onClick={() => closeBooking(s.id)}>
-                  Cerrar reservas
-                </Button>
-              )}
-              {!["CANCELLED", "FINISHED"].includes(s.status) && (
-                <Button variant="ghost" onClick={() => cancelShowtime(s.id)}>
-                  Cancelar
-                </Button>
-              )}
+      <div className="flex flex-col gap-6">
+        {Object.entries(groupedByDay).map(([day, rows]) => (
+          <div key={day}>
+            <h2 className="mb-3 text-xs uppercase tracking-widest text-gold">{day}</h2>
+            <div className="flex flex-col gap-3">
+              {rows.map((s) => (
+                <div key={s.id} className="rounded-2xl border border-line bg-ink-card p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-display text-lg text-cream">{s.movie.title}</p>
+                      <p className="text-sm text-cream-dim">
+                        {new Date(s.startsAt).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {s.availability.confirmed} confirmadas · {s.availability.pending} pendientes ·{" "}
+                        {s.availability.available} disponibles de {s.capacity}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge status={s.status === "DRAFT" ? "PENDING_PAYMENT" : "CONFIRMED"} />
+                      <span className="text-xs text-muted">{STATUS_LABEL[s.status] ?? s.status}</span>
+                      <Button variant="ghost" onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}>
+                        {expandedId === s.id ? "Ocultar módulos" : "Ver módulos"}
+                      </Button>
+                      {s.status === "DRAFT" && (
+                        <Button variant="secondary" onClick={() => publish(s.id)}>
+                          Publicar
+                        </Button>
+                      )}
+                      {s.status === "PUBLISHED" && (
+                        <Button variant="secondary" onClick={() => closeBooking(s.id)}>
+                          Cerrar reservas
+                        </Button>
+                      )}
+                      {!["CANCELLED", "FINISHED"].includes(s.status) && (
+                        <Button variant="ghost" onClick={() => cancelShowtime(s.id)}>
+                          Cancelar
+                        </Button>
+                      )}
+                      {s.availability.confirmed === 0 && s.availability.pending === 0 && (
+                        <Button variant="ghost" onClick={() => deleteShowtime(s.id)}>
+                          Eliminar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {expandedId === s.id && (
+                    <div className="mt-4">
+                      <SeatingMap showtimeId={s.id} />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         ))}
+        {showtimes.length === 0 && <p className="text-sm text-muted">No hay funciones programadas todavía.</p>}
       </div>
     </div>
   );

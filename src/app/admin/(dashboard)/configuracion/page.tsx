@@ -22,11 +22,15 @@ interface Settings {
   privacy_policy_url: string;
   cancellation_policy_url: string;
   instagram_url: string;
+  tiktok_url: string;
+  location_url: string;
+  menu_url: string;
   about_us_text: string;
   business_sales_email: string;
   payment_mode: "transfer" | "online";
   payment_transfer_key: string;
   payment_transfer_instructions: string;
+  payment_qr_url: string;
 }
 
 export default function SettingsPage() {
@@ -34,6 +38,8 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<Settings>("/api/admin/settings").then(setSettings);
@@ -44,6 +50,26 @@ export default function SettingsPage() {
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
     setSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
     setSaved(false);
+  }
+
+  async function handleQrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || "No pudimos subir la imagen.");
+      set("payment_qr_url", json.data.url as string);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "No pudimos subir la imagen.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -107,6 +133,30 @@ export default function SettingsPage() {
             className={inputClass}
           />
         </Field>
+        <Field label="TikTok (URL, opcional)">
+          <input
+            value={settings.tiktok_url}
+            onChange={(e) => set("tiktok_url", e.target.value)}
+            placeholder="https://www.tiktok.com/@..."
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Ubicación en Google Maps (URL, opcional)">
+          <input
+            value={settings.location_url}
+            onChange={(e) => set("location_url", e.target.value)}
+            placeholder="https://maps.app.goo.gl/..."
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Carta / menú (URL, opcional)">
+          <input
+            value={settings.menu_url}
+            onChange={(e) => set("menu_url", e.target.value)}
+            placeholder="https://app.treggio.co/..."
+            className={inputClass}
+          />
+        </Field>
         <Field label="Correo del negocio (recibe el aviso de cada venta)">
           <input
             value={settings.business_sales_email}
@@ -156,6 +206,41 @@ export default function SettingsPage() {
                 rows={3}
                 className={inputClass}
               />
+            </Field>
+            <Field label="Código QR de pago (opcional)">
+              <div className="flex flex-col gap-3">
+                {settings.payment_qr_url && (
+                  <div className="flex items-center gap-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={settings.payment_qr_url}
+                      alt="QR de pago actual"
+                      className="h-28 w-28 rounded-lg bg-cream object-contain p-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => set("payment_qr_url", "")}
+                      className="text-xs text-cream-dim hover:text-danger"
+                    >
+                      Quitar imagen
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <label className="cursor-pointer rounded-full border border-line px-4 py-2 text-xs text-cream-dim hover:border-gold hover:text-gold">
+                    {uploading ? "Subiendo..." : "Subir imagen"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleQrFileChange} disabled={uploading} />
+                  </label>
+                  <span className="text-xs text-muted">o pega un link directamente abajo</span>
+                </div>
+                <input
+                  value={settings.payment_qr_url}
+                  onChange={(e) => set("payment_qr_url", e.target.value)}
+                  placeholder="https://... (link de la imagen del QR)"
+                  className={inputClass}
+                />
+                {uploadError && <p className="text-xs text-danger">{uploadError}</p>}
+              </div>
             </Field>
           </>
         )}

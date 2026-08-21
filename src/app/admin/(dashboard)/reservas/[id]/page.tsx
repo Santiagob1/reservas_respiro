@@ -23,6 +23,11 @@ interface ReservationDetailDto {
   items: { ticketTypeName: string; quantity: number; unitPrice: number; total: number }[];
   payments: { id: string; method: string; status: string; amount: number; cashReference: string | null }[];
   checkIn: { checkedInAt: string } | null;
+  moduleAssignments: {
+    seatsOccupied: number;
+    usesAuxiliary: boolean;
+    venueModule: { label: string; type: string };
+  }[];
 }
 
 export default function ReservationDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -106,6 +111,19 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ id
           </p>
         ))}
       </div>
+
+      {reservation.moduleAssignments.length > 0 && (
+        <div className="rounded-2xl border border-line bg-ink-card p-5">
+          <p className="text-sm font-semibold text-cream">Módulos asignados</p>
+          {reservation.moduleAssignments.map((a, i) => (
+            <p key={i} className="mt-1 text-sm text-cream-dim">
+              {a.venueModule.label} ({a.venueModule.type === "COUPLE" ? "pareja" : "trío"}) · {a.seatsOccupied}{" "}
+              persona{a.seatsOccupied === 1 ? "" : "s"}
+              {a.usesAuxiliary ? " · con auxiliar" : ""}
+            </p>
+          ))}
+        </div>
+      )}
 
       {reservation.checkIn && (
         <p className="text-sm text-gold">

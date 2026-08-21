@@ -18,10 +18,14 @@ export async function GET() {
       cancellationPolicyUrl: settings.cancellation_policy_url,
       reservationHoldMinutes: settings.reservation_hold_minutes,
       instagramUrl: settings.instagram_url,
+      tiktokUrl: settings.tiktok_url,
+      locationUrl: settings.location_url,
+      menuUrl: settings.menu_url,
       aboutUsText: settings.about_us_text,
       paymentMode: settings.payment_mode,
       paymentTransferKey: settings.payment_transfer_key,
       paymentTransferInstructions: settings.payment_transfer_instructions,
+      paymentQrUrl: settings.payment_qr_url,
       cashReservationHoldHours: settings.cash_reservation_hold_hours,
     });
   } catch (error) {
