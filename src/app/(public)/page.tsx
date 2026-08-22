@@ -6,7 +6,7 @@ import { AgendaPicker } from "@/components/public/AgendaPicker";
 
 export default async function HomePage() {
   const [showtimes, settings] = await Promise.all([listPublicShowtimes(), getSettings()]);
-  const nextShowtime = showtimes[0];
+  const nextShowtime = showtimes.find((s) => s.state === "AVAILABLE" || s.state === "LOW_AVAILABILITY");
   const todayKey = getCinemaTodayKey();
 
   return (
