@@ -94,6 +94,11 @@ export default function ShowtimesPage() {
     load();
   }
 
+  async function reopenBooking(id: string) {
+    await apiPost(`/api/admin/showtimes/${id}/reopen-booking`, {});
+    load();
+  }
+
   async function cancelShowtime(id: string) {
     if (!window.confirm("¿Cancelar esta función? Las reservas asociadas no se eliminan y deberán gestionarse manualmente.")) return;
     await apiPost(`/api/admin/showtimes/${id}/cancel`, {});
@@ -262,6 +267,11 @@ export default function ShowtimesPage() {
                             {s.status === "PUBLISHED" && (
                               <Button variant="ghost" size="sm" onClick={() => closeBooking(s.id)}>
                                 Cerrar reservas
+                              </Button>
+                            )}
+                            {s.status === "BOOKING_CLOSED" && (
+                              <Button size="sm" onClick={() => reopenBooking(s.id)}>
+                                Reabrir reservas
                               </Button>
                             )}
                             <Button variant="ghost" size="sm" onClick={() => cancelShowtime(s.id)}>

@@ -39,7 +39,10 @@ export async function listShowtimes(filters: {
         lte: filters.to,
       },
       status: filters.status ? { in: filters.status as never } : undefined,
-      ...(filters.publicOnly ? { status: "PUBLISHED" as never } : {}),
+      // El público debe seguir viendo el día con su función aunque esté agotada o
+      // con reservas cerradas (para mostrar "Agotado"/"Cerrada" en vez de que el
+      // día parezca vacío); solo se ocultan borradores, canceladas y finalizadas.
+      ...(filters.publicOnly ? { status: { in: ["PUBLISHED", "SOLD_OUT", "BOOKING_CLOSED"] } as never } : {}),
     },
     include: { movie: true },
     orderBy: { startsAt: "asc" },
@@ -117,6 +120,11 @@ export async function publishWeek(showtimeIds: string[]) {
 export async function closeBooking(id: string) {
   await getShowtimeById(id);
   return prisma.showtime.update({ where: { id }, data: { status: "BOOKING_CLOSED" } });
+}
+
+export async function reopenBooking(id: string) {
+  await getShowtimeById(id);
+  return prisma.showtime.update({ where: { id }, data: { status: "PUBLISHED" } });
 }
 
 export async function cancelShowtime(id: string) {
