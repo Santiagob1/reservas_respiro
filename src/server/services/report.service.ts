@@ -2,6 +2,14 @@ import { prisma } from "@/lib/prisma";
 import { formatCinemaDate } from "@/lib/timezone";
 
 /**
+ * Reservas cuyo pago aprobado representa dinero realmente ingresado y
+ * conservado. Se excluyen CANCELLED (la reserva se anuló; el pago, si quedó
+ * marcado como aprobado, no se revierte automáticamente pero ya no es una
+ * venta vigente), EXPIRED y REFUNDED (el dinero se devolvió).
+ */
+const REVENUE_STATUSES = ["PAYMENT_APPROVED", "CONFIRMED", "CHECKED_IN", "NO_SHOW"] as const;
+
+/**
  * El reporte suma ingresos por la fecha en que se recibió cada pago
  * (payment.confirmedAt), no por la fecha de la función: casi todas las
  * reservas se pagan para una función futura, así que filtrar/agrupar por
@@ -13,6 +21,7 @@ export async function getReport(from: Date, to: Date) {
     where: {
       status: "APPROVED",
       confirmedAt: { gte: from, lte: to },
+      reservation: { status: { in: [...REVENUE_STATUSES] } },
     },
     include: { reservation: { include: { items: true } } },
   });

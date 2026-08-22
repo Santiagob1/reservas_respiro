@@ -3,6 +3,9 @@ import { CINEMA_TIMEZONE, formatCinemaDate, formatCinemaTime } from "@/lib/timez
 import { getShowtimeAvailability } from "@/server/services/availability.service";
 import { toZonedTime, fromZonedTime, format } from "date-fns-tz";
 
+/** Reservas cuyo pago aprobado sigue representando una venta vigente (ver report.service.ts). */
+const REVENUE_STATUSES = ["PAYMENT_APPROVED", "CONFIRMED", "CHECKED_IN", "NO_SHOW"] as const;
+
 function startOfCinemaDay(reference = new Date()): Date {
   const local = format(toZonedTime(reference, CINEMA_TIMEZONE), "yyyy-MM-dd", {
     timeZone: CINEMA_TIMEZONE,
@@ -33,7 +36,10 @@ export async function getTodayShowtimes() {
 
       const [revenueAgg, pendingCount, reservationsCount] = await Promise.all([
         prisma.payment.aggregate({
-          where: { status: "APPROVED", reservation: { showtimeId: showtime.id } },
+          where: {
+            status: "APPROVED",
+            reservation: { showtimeId: showtime.id, status: { in: [...REVENUE_STATUSES] } },
+          },
           _sum: { amount: true },
         }),
         prisma.reservation.count({
