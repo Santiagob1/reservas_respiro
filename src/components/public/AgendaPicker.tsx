@@ -6,11 +6,10 @@ import type { PublicShowtimeDto } from "@/server/dto/showtime.dto";
 
 const STATE_LABEL: Record<PublicShowtimeDto["state"], { label: string; tone: string }> = {
   AVAILABLE: { label: "Disponible", tone: "text-success" },
-  LOW_AVAILABILITY: { label: "Últimos cupos", tone: "text-warning" },
+  LOW_AVAILABILITY: { label: "¡Se está llenando!", tone: "text-warning" },
   SOLD_OUT: { label: "Agotado", tone: "text-danger" },
   CANCELLED: { label: "Cancelada", tone: "text-danger" },
   FINISHED: { label: "Finalizada", tone: "text-muted" },
-  BOOKING_CLOSED: { label: "Cerrada", tone: "text-muted" },
 };
 
 const WINDOW_SIZE = 7;
@@ -143,19 +142,28 @@ export function AgendaPicker({
 function FunctionCard({ showtime }: { showtime: PublicShowtimeDto }) {
   const state = STATE_LABEL[showtime.state];
   const reservable = showtime.state === "AVAILABLE" || showtime.state === "LOW_AVAILABILITY";
+  const soldOut = showtime.state === "SOLD_OUT";
+  const low = showtime.state === "LOW_AVAILABILITY";
 
   return (
     <div className="flex flex-col gap-5 rounded-2xl border border-line bg-ink-card p-5 sm:flex-row">
-      <div className="h-48 w-full shrink-0 overflow-hidden rounded-xl bg-ink-soft sm:h-auto sm:w-32">
+      <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-xl bg-ink-soft sm:h-auto sm:w-32">
         {showtime.movie.posterUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={showtime.movie.posterUrl}
             alt={`Póster de ${showtime.movie.title}`}
-            className="h-full w-full object-cover"
+            className={`h-full w-full object-cover transition-opacity ${soldOut ? "opacity-30" : ""}`}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs text-muted">Sin imagen</div>
+        )}
+        {soldOut && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="-rotate-12 rounded border-2 border-danger bg-ink/90 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-danger shadow-lg">
+              Agotado
+            </span>
+          </div>
         )}
       </div>
 
@@ -171,7 +179,11 @@ function FunctionCard({ showtime }: { showtime: PublicShowtimeDto }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className={`text-sm font-semibold ${state.tone}`}>{state.label}</p>
-            {reservable && <p className="text-xs text-muted">{showtime.available} cupos disponibles</p>}
+            {reservable && (
+              <p className={`text-xs ${low ? "font-semibold text-warning" : "text-muted"}`}>
+                {low ? `¡Quedan solo ${showtime.available} entradas!` : `${showtime.available} cupos disponibles`}
+              </p>
+            )}
           </div>
 
           {reservable ? (
