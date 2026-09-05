@@ -9,9 +9,15 @@ export interface TicketTypeInput {
   sortOrder?: number;
 }
 
-export async function listTicketTypes(opts: { onlyActive?: boolean } = {}) {
+export async function listTicketTypes(opts: { onlyActive?: boolean; includeHidden?: boolean } = {}) {
   return prisma.ticketType.findMany({
-    where: opts.onlyActive ? { active: true } : undefined,
+    where: {
+      active: opts.onlyActive ? true : undefined,
+      // Los "hidden" son menús especiales autogenerados para una función puntual
+      // (ver Showtime.specialTicketTypeId): no son productos que el admin
+      // gestione ni que el cliente deba ver en la lista general.
+      hidden: opts.includeHidden ? undefined : false,
+    },
     orderBy: { sortOrder: "asc" },
   });
 }

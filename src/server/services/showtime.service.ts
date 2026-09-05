@@ -18,12 +18,21 @@ const ACTIVE_RESERVATION_STATUSES = [
   "CHECKED_IN",
 ] as const;
 
-export interface ShowtimeInput {
+export interface SpecialFields {
+  isSpecial?: boolean;
+  specialAdImageUrl?: string | null;
+  specialMenuPrice?: number | null;
+  specialDescription?: string | null;
+}
+
+export interface ShowtimeInput extends SpecialFields {
   movieId: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   capacity: number;
   status?: "DRAFT" | "PUBLISHED";
+  /** undefined = no tocar la configuración de productos habilitados. */
+  enabledTicketTypeIds?: string[];
 }
 
 export async function listShowtimes(filters: {
@@ -58,15 +67,32 @@ export async function getShowtimeById(id: string) {
 export async function createShowtime(input: ShowtimeInput) {
   validateShowtimeInput(input);
   await validateCapacityAgainstRoom(input.capacity);
+  validateSpecialFields(input);
   const startsAt = zonedDateTimeToUtc(input.date, input.time);
-  return prisma.showtime.create({
+
+  const showtime = await prisma.showtime.create({
     data: {
       movieId: input.movieId,
       startsAt,
       capacity: input.capacity,
       status: input.status ?? "DRAFT",
+      isSpecial: input.isSpecial ?? false,
+      specialAdImageUrl: input.specialAdImageUrl ?? null,
+      specialMenuPrice: input.specialMenuPrice ?? null,
+      specialDescription: input.specialDescription ?? null,
     },
   });
+
+  if (input.isSpecial && input.specialMenuPrice) {
+    const specialTicketTypeId = await upsertSpecialTicketType(null, input.specialMenuPrice);
+    await prisma.showtime.update({ where: { id: showtime.id }, data: { specialTicketTypeId } });
+  }
+
+  if (input.enabledTicketTypeIds !== undefined) {
+    await setEnabledTicketTypes(showtime.id, input.enabledTicketTypeIds);
+  }
+
+  return getShowtimeById(showtime.id);
 }
 
 export async function updateShowtime(
@@ -106,7 +132,26 @@ export async function updateShowtime(
     data.status = patch.status;
   }
 
-  return prisma.showtime.update({ where: { id }, data });
+  if (patch.isSpecial !== undefined) data.isSpecial = patch.isSpecial;
+  if (patch.specialAdImageUrl !== undefined) data.specialAdImageUrl = patch.specialAdImageUrl;
+  if (patch.specialMenuPrice !== undefined) data.specialMenuPrice = patch.specialMenuPrice;
+  if (patch.specialDescription !== undefined) data.specialDescription = patch.specialDescription;
+
+  const willBeSpecial = patch.isSpecial ?? showtime.isSpecial;
+  const finalMenuPrice = patch.specialMenuPrice !== undefined ? patch.specialMenuPrice : showtime.specialMenuPrice;
+  validateSpecialFields({ isSpecial: willBeSpecial, specialMenuPrice: finalMenuPrice });
+
+  if (willBeSpecial && finalMenuPrice) {
+    data.specialTicketTypeId = await upsertSpecialTicketType(showtime.specialTicketTypeId, finalMenuPrice);
+  }
+
+  const updated = await prisma.showtime.update({ where: { id }, data });
+
+  if (patch.enabledTicketTypeIds !== undefined) {
+    await setEnabledTicketTypes(id, patch.enabledTicketTypeIds);
+  }
+
+  return updated;
 }
 
 export async function publishWeek(showtimeIds: string[]) {
@@ -170,4 +215,69 @@ function validateShowtimeInput(input: ShowtimeInput) {
   if (!input.capacity || input.capacity <= 0) {
     throw new ValidationException("La capacidad debe ser mayor a 0.");
   }
+}
+
+function validateSpecialFields(input: { isSpecial?: boolean; specialMenuPrice?: number | null }) {
+  if (input.isSpecial && (!input.specialMenuPrice || input.specialMenuPrice <= 0)) {
+    throw new ValidationException("Una función especial necesita un valor de menú especial mayor a 0.");
+  }
+}
+
+/**
+ * Crea o actualiza el TicketType oculto que representa el "menú especial" de
+ * una función. Se reutiliza el mismo registro entre ediciones (identificado
+ * por `existingId`) para no perder el historial de reservas ya creadas con
+ * ese producto si el precio cambia después.
+ */
+async function upsertSpecialTicketType(existingId: string | null, price: number): Promise<string> {
+  if (existingId) {
+    const updated = await prisma.ticketType.update({
+      where: { id: existingId },
+      data: { price, active: true, hidden: true },
+    });
+    return updated.id;
+  }
+  const created = await prisma.ticketType.create({
+    data: {
+      name: "Menú especial",
+      price,
+      includes: [],
+      active: true,
+      hidden: true,
+      sortOrder: 999,
+    },
+  });
+  return created.id;
+}
+
+/** Reemplaza por completo el set de productos habilitados para una función. */
+async function setEnabledTicketTypes(showtimeId: string, ticketTypeIds: string[]) {
+  await prisma.$transaction([
+    prisma.showtimeTicketType.deleteMany({ where: { showtimeId } }),
+    ...(ticketTypeIds.length > 0
+      ? [
+          prisma.showtimeTicketType.createMany({
+            data: ticketTypeIds.map((ticketTypeId) => ({ showtimeId, ticketTypeId })),
+          }),
+        ]
+      : []),
+  ]);
+}
+
+/**
+ * Productos disponibles para reservar en una función puntual. Sin overrides
+ * configurados, aplican todos los activos (comportamiento por defecto).
+ */
+export async function getEnabledTicketTypesForShowtime(showtimeId: string) {
+  const overrides = await prisma.showtimeTicketType.findMany({
+    where: { showtimeId },
+    select: { ticketTypeId: true },
+  });
+  if (overrides.length === 0) {
+    return prisma.ticketType.findMany({ where: { active: true, hidden: false }, orderBy: { sortOrder: "asc" } });
+  }
+  return prisma.ticketType.findMany({
+    where: { id: { in: overrides.map((o) => o.ticketTypeId) }, active: true },
+    orderBy: { sortOrder: "asc" },
+  });
 }

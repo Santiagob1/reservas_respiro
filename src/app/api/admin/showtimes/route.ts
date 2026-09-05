@@ -12,6 +12,11 @@ const createSchema = z.object({
   time: z.string().regex(/^\d{2}:\d{2}$/),
   capacity: z.number().int().positive(),
   status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
+  isSpecial: z.boolean().optional(),
+  specialAdImageUrl: z.string().optional().nullable(),
+  specialMenuPrice: z.number().int().positive().optional().nullable(),
+  specialDescription: z.string().optional().nullable(),
+  enabledTicketTypeIds: z.array(z.string()).optional(),
 });
 
 export async function GET(req: Request) {
@@ -31,12 +36,23 @@ export async function GET(req: Request) {
       _count: { _all: true },
     });
     const countByShowtime = new Map(reservationCounts.map((r) => [r.showtimeId, r._count._all]));
+    const overrides = await prisma.showtimeTicketType.findMany({
+      where: { showtimeId: { in: showtimes.map((s) => s.id) } },
+    });
+    const overridesByShowtime = new Map<string, string[]>();
+    for (const o of overrides) {
+      const list = overridesByShowtime.get(o.showtimeId) ?? [];
+      list.push(o.ticketTypeId);
+      overridesByShowtime.set(o.showtimeId, list);
+    }
 
     return ok(
       showtimes.map((s) => ({
         ...s,
         availability: availability[s.id],
         hasReservationHistory: (countByShowtime.get(s.id) ?? 0) > 0,
+        // null = sin override configurado (aplica el comportamiento por defecto: todos habilitados).
+        enabledTicketTypeIds: overridesByShowtime.get(s.id) ?? null,
       }))
     );
   } catch (error) {

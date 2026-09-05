@@ -7,15 +7,44 @@ export function StepTickets({
   ticketTypes,
   maxAvailable,
   onChangeItem,
+  onChangeSpecialCount,
   onContinue,
 }: {
   state: WizardState;
   ticketTypes: TicketTypeDto[];
   maxAvailable: number;
   onChangeItem: (ticketTypeId: string, v: number) => void;
+  onChangeSpecialCount: (v: number) => void;
   onContinue: () => void;
 }) {
   const people = totalPeople(state);
+
+  if (state.showtime?.isSpecial) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="font-display text-2xl text-cream">Función especial</h2>
+          {state.showtime.specialDescription && (
+            <p className="text-sm text-cream-dim">{state.showtime.specialDescription}</p>
+          )}
+
+          <div className="mt-4 rounded-xl border border-line p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-semibold text-cream">Menú especial</p>
+                <p className="text-sm text-gold">{formatCOP(state.showtime.specialMenuPrice ?? 0)} por persona</p>
+              </div>
+              <Counter label="" value={state.specialPeopleCount} max={maxAvailable} onChange={onChangeSpecialCount} />
+            </div>
+          </div>
+        </div>
+
+        <Button onClick={onContinue} disabled={people === 0}>
+          Continuar
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

@@ -24,6 +24,7 @@ const INITIAL_STATE: WizardState = {
   step: 1,
   showtime: null,
   itemQuantities: {},
+  specialPeopleCount: 0,
   fullName: "",
   whatsapp: "",
   email: "",
@@ -41,9 +42,12 @@ export function ReservationWizard({ initialShowtimeId }: { initialShowtimeId?: s
     let cancelled = false;
     async function load() {
       try {
+        const ticketTypesUrl = initialShowtimeId
+          ? `/api/ticket-types?showtimeId=${initialShowtimeId}`
+          : "/api/ticket-types";
         const [allShowtimes, allTicketTypes, settings] = await Promise.all([
           apiGet<PublicShowtimeDto[]>("/api/showtimes"),
-          apiGet<TicketTypeDto[]>("/api/ticket-types"),
+          apiGet<TicketTypeDto[]>(ticketTypesUrl),
           apiGet<PublicPaymentSettings>("/api/settings/public"),
         ]);
         if (cancelled) return;
@@ -107,6 +111,7 @@ export function ReservationWizard({ initialShowtimeId }: { initialShowtimeId?: s
             ticketTypes={ticketTypes}
             maxAvailable={maxAvailable}
             onChangeItem={(id, v) => patch({ itemQuantities: { ...state.itemQuantities, [id]: v } })}
+            onChangeSpecialCount={(v) => patch({ specialPeopleCount: v })}
             onContinue={() => goTo(2)}
           />
         )}

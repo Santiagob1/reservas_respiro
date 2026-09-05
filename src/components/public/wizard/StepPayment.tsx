@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { apiPost, ApiError } from "@/lib/api-client";
-import { calculateTotal, formatCOP, totalPeople, type TicketTypeDto, type WizardState } from "./types";
+import { calculateTotal, formatCOP, getSummaryLines, totalPeople, type TicketTypeDto, type WizardState } from "./types";
 import type { PublicPaymentSettings } from "./ReservationWizard";
 
 interface CreateReservationResponse {
@@ -177,16 +177,12 @@ export function StepPayment({
           {state.showtime.dateLabel} · {state.showtime.timeLabel}
         </p>
         <ul className="mt-4 flex flex-col gap-1 text-sm text-cream-dim">
-          {ticketTypes
-            .filter((t) => (state.itemQuantities[t.id] ?? 0) > 0)
-            .map((t) => (
-              <li key={t.id} className="flex justify-between">
-                <span>
-                  {state.itemQuantities[t.id]} × {t.name}
-                </span>
-                <span>{formatCOP(t.price * (state.itemQuantities[t.id] ?? 0))}</span>
-              </li>
-            ))}
+          {getSummaryLines(state, ticketTypes).map((line) => (
+            <li key={line.key} className="flex justify-between">
+              <span>{line.label}</span>
+              <span>{formatCOP(line.amount)}</span>
+            </li>
+          ))}
         </ul>
         <div className="mt-4 flex justify-between border-t border-line pt-3">
           <span className="font-semibold text-cream">Total</span>

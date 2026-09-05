@@ -13,6 +13,9 @@ interface ShowtimeOption {
   status: string;
   movie: { title: string };
   availability: { available: number };
+  isSpecial: boolean;
+  specialMenuPrice: number | null;
+  specialDescription: string | null;
 }
 
 interface TicketTypeOption {
@@ -42,13 +45,25 @@ export default function NewManualReservationPage() {
     apiGet<ShowtimeOption[]>(`/api/admin/showtimes?from=${from}`).then((all) =>
       setShowtimes(all.filter((s) => !["CANCELLED", "FINISHED"].includes(s.status)))
     );
-    apiGet<TicketTypeOption[]>("/api/ticket-types").then(setTicketTypes);
   }, []);
+
+  useEffect(() => {
+    setQuantities({});
+    if (!showtimeId) {
+      setTicketTypes([]);
+      return;
+    }
+    apiGet<TicketTypeOption[]>(`/api/ticket-types?showtimeId=${showtimeId}`).then(setTicketTypes);
+  }, [showtimeId]);
 
   const people = adults + children;
   const itemsQty = Object.values(quantities).reduce((a, b) => a + b, 0);
-  const total = ticketTypes.reduce((sum, t) => sum + (quantities[t.id] ?? 0) * t.price, 0);
   const selected = showtimes.find((s) => s.id === showtimeId);
+  const isSpecial = selected?.isSpecial ?? false;
+  const total = isSpecial
+    ? (selected?.specialMenuPrice ?? 0) * people
+    : ticketTypes.reduce((sum, t) => sum + (quantities[t.id] ?? 0) * t.price, 0);
+  const canSubmit = !loading && !!showtimeId && people > 0 && (isSpecial || itemsQty === people);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,9 +75,11 @@ export default function NewManualReservationPage() {
         showtimeId,
         adults,
         children,
-        items: Object.entries(quantities)
-          .filter(([, qty]) => qty > 0)
-          .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
+        items: isSpecial
+          ? []
+          : Object.entries(quantities)
+              .filter(([, qty]) => qty > 0)
+              .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
         customer: { fullName, whatsapp, email: email || undefined },
         source,
         paymentMethod,
@@ -89,6 +106,7 @@ export default function NewManualReservationPage() {
           <option value="">Selecciona una función</option>
           {showtimes.map((s) => (
             <option key={s.id} value={s.id}>
+              {s.isSpecial ? "★ " : ""}
               {s.movie.title} · {new Date(s.startsAt).toLocaleString("es-CO")} · {s.availability.available} cupos
             </option>
           ))}
@@ -100,26 +118,37 @@ export default function NewManualReservationPage() {
         <Counter label="Niños" value={children} max={selected?.availability.available ?? 15} onChange={setChildren} />
       </div>
 
-      <div className="flex flex-col gap-3">
-        {ticketTypes.map((t) => (
-          <div key={t.id} className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
-            <span className="text-cream">
-              {t.name} · {formatCOP(t.price)}
-            </span>
-            <Counter
-              label=""
-              value={quantities[t.id] ?? 0}
-              max={selected?.availability.available ?? 15}
-              onChange={(v) => setQuantities((prev) => ({ ...prev, [t.id]: v }))}
-            />
-          </div>
-        ))}
-        {people > 0 && itemsQty !== people && (
-          <p className="text-sm text-warning">
-            {itemsQty} entradas para {people} personas — deben coincidir.
+      {isSpecial ? (
+        <div className="rounded-xl border border-gold/40 bg-gold/5 px-4 py-3">
+          <p className="text-sm font-semibold text-gold">Función especial</p>
+          {selected?.specialDescription && <p className="mt-1 text-xs text-cream-dim">{selected.specialDescription}</p>}
+          <p className="mt-2 text-sm text-cream-dim">
+            {formatCOP(selected?.specialMenuPrice ?? 0)} por persona · {people} persona{people === 1 ? "" : "s"} ={" "}
+            {formatCOP(total)}
           </p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {ticketTypes.map((t) => (
+            <div key={t.id} className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
+              <span className="text-cream">
+                {t.name} · {formatCOP(t.price)}
+              </span>
+              <Counter
+                label=""
+                value={quantities[t.id] ?? 0}
+                max={selected?.availability.available ?? 15}
+                onChange={(v) => setQuantities((prev) => ({ ...prev, [t.id]: v }))}
+              />
+            </div>
+          ))}
+          {people > 0 && itemsQty !== people && (
+            <p className="text-sm text-warning">
+              {itemsQty} entradas para {people} personas — deben coincidir.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -186,7 +215,7 @@ export default function NewManualReservationPage() {
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <Button type="submit" disabled={loading || !showtimeId || itemsQty !== people || people === 0}>
+      <Button type="submit" disabled={!canSubmit}>
         {loading ? "Guardando..." : "Guardar reserva"}
       </Button>
     </form>

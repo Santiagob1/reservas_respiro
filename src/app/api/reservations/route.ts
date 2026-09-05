@@ -6,14 +6,14 @@ const bodySchema = z.object({
   showtimeId: z.string().min(1),
   adults: z.number().int().min(0),
   children: z.number().int().min(0),
-  items: z
-    .array(
-      z.object({
-        ticketTypeId: z.string().min(1),
-        quantity: z.number().int().positive(),
-      })
-    )
-    .min(1),
+  // Vacío es válido para funciones especiales: el servidor construye el
+  // ítem real (precio fijo por persona) e ignora lo que envíe el cliente.
+  items: z.array(
+    z.object({
+      ticketTypeId: z.string().min(1),
+      quantity: z.number().int().positive(),
+    })
+  ),
   customer: z.object({
     fullName: z.string().min(3),
     whatsapp: z.string().min(7),
