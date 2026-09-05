@@ -5,10 +5,14 @@ const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 
 /**
- * Sube una imagen (ej. el QR de pago) a Vercel Blob y devuelve su URL
- * pública. Requiere que el proyecto tenga un Blob Store creado en Vercel
- * (Storage → Create Database → Blob) — eso inyecta BLOB_READ_WRITE_TOKEN
- * automáticamente, sin configuración manual adicional.
+ * Sube una imagen (ej. el QR de pago, imagen de función especial) a Vercel
+ * Blob y devuelve una URL servible públicamente. Requiere que el proyecto
+ * tenga un Blob Store creado en Vercel (Storage → Create Database → Blob).
+ *
+ * El store de este proyecto está configurado en modo "private" (no "public"),
+ * así que subimos con access:"private" y servimos el archivo a través de
+ * `/api/blob` (ver esa ruta) en vez de devolver la URL directa de Vercel —
+ * esa URL directa exige autenticación y no es visitable desde un <img src>.
  */
 export async function POST(req: Request) {
   try {
@@ -37,11 +41,11 @@ export async function POST(req: Request) {
     const { put } = await import("@vercel/blob");
     const extension = file.name.split(".").pop() || "png";
     const blob = await put(`payment-qr/${admin.id}-${Date.now()}.${extension}`, file, {
-      access: "public",
+      access: "private",
       addRandomSuffix: true,
     });
 
-    return ok({ url: blob.url });
+    return ok({ url: `/api/blob?pathname=${encodeURIComponent(blob.pathname)}` });
   } catch (error) {
     return handleApiError(error);
   }
