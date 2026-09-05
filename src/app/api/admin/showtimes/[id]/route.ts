@@ -11,6 +11,11 @@ const patchSchema = z.object({
   capacity: z.number().int().positive().optional(),
   status: z.enum(["DRAFT", "PUBLISHED", "SOLD_OUT", "BOOKING_CLOSED", "CANCELLED", "FINISHED"]).optional(),
   confirmDespiteReservations: z.boolean().optional(),
+  isSpecial: z.boolean().optional(),
+  specialAdImageUrl: z.string().optional().nullable(),
+  specialMenuPrice: z.number().int().positive().optional().nullable(),
+  specialDescription: z.string().optional().nullable(),
+  enabledTicketTypeIds: z.array(z.string()).optional(),
 });
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -1,5 +1,5 @@
 import type { TicketTypeDto, WizardState } from "./types";
-import { calculateTotal, formatCOP, totalPeople } from "./types";
+import { calculateTotal, formatCOP, getSummaryLines, totalPeople } from "./types";
 
 export function SummaryPanel({
   state,
@@ -24,16 +24,12 @@ export function SummaryPanel({
       {people > 0 && <p className="mt-3 text-sm text-cream-dim">{people} persona{people === 1 ? "" : "s"}</p>}
 
       <ul className="mt-2 flex flex-col gap-1 text-sm">
-        {ticketTypes
-          .filter((t) => (state.itemQuantities[t.id] ?? 0) > 0)
-          .map((t) => (
-            <li key={t.id} className="flex justify-between text-cream-dim">
-              <span>
-                {state.itemQuantities[t.id]} {t.name}
-              </span>
-              <span>{formatCOP(t.price * (state.itemQuantities[t.id] ?? 0))}</span>
-            </li>
-          ))}
+        {getSummaryLines(state, ticketTypes).map((line) => (
+          <li key={line.key} className="flex justify-between text-cream-dim">
+            <span>{line.label}</span>
+            <span>{formatCOP(line.amount)}</span>
+          </li>
+        ))}
       </ul>
 
       <div className="mt-4 flex justify-between border-t border-line pt-3">

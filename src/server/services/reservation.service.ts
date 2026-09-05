@@ -10,10 +10,12 @@ import {
   ShowtimeNotAvailableException,
   ShowtimeNotFoundException,
   AlreadyCheckedInException,
+  ValidationException,
 } from "@/server/domain/errors";
 import { lockShowtimeForUpdate } from "@/server/services/availability.service";
 import { getShowtimeSeatingState, findSeatingPlan } from "@/server/services/seating.service";
 import { priceReservationItems, type ReservationItemInput } from "@/server/services/pricing.service";
+import { getEnabledTicketTypesForShowtime } from "@/server/services/showtime.service";
 import { findOrCreateCustomer, type CustomerInput } from "@/server/services/customer.service";
 import { getSettings } from "@/server/services/settings.service";
 import { recordAudit } from "@/server/services/audit.service";
@@ -84,7 +86,26 @@ export async function createReservation(
       throw new ShowtimeNotAvailableException("Las reservas para esta función están cerradas.");
     }
 
-    const pricing = await priceReservationItems(input.items, input.adults, input.children, tx);
+    // Las funciones especiales tienen un precio de menú fijo por persona: el
+    // ítem a cobrar lo decide el servidor (nunca el cliente), ignorando
+    // cualquier selección de productos que haya llegado en la solicitud.
+    let items = input.items;
+    if (showtime.isSpecial) {
+      if (!showtime.specialTicketTypeId) {
+        throw new ShowtimeNotAvailableException("Esta función especial todavía no tiene un menú configurado.");
+      }
+      items = [{ ticketTypeId: showtime.specialTicketTypeId, quantity: input.adults + input.children }];
+    } else {
+      const enabled = await getEnabledTicketTypesForShowtime(input.showtimeId);
+      const enabledIds = new Set(enabled.map((t) => t.id));
+      for (const item of input.items) {
+        if (!enabledIds.has(item.ticketTypeId)) {
+          throw new ValidationException("Uno de los productos seleccionados no está disponible para esta función.");
+        }
+      }
+    }
+
+    const pricing = await priceReservationItems(items, input.adults, input.children, tx);
 
     const seating = await getShowtimeSeatingState(input.showtimeId, tx);
     const effectiveCapacity = Math.min(showtime.capacity, seating.physicalMax);

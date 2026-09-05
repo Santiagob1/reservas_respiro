@@ -27,6 +27,10 @@ export interface PublicShowtimeDto {
   capacity: number;
   available: number;
   state: PublicShowtimeState;
+  isSpecial: boolean;
+  specialAdImageUrl: string | null;
+  specialMenuPrice: number | null;
+  specialDescription: string | null;
 }
 
 export function toPublicShowtimeDto(
@@ -59,6 +63,10 @@ export function toPublicShowtimeDto(
     capacity: showtime.capacity,
     available: availability.available,
     state,
+    isSpecial: showtime.isSpecial,
+    specialAdImageUrl: showtime.specialAdImageUrl,
+    specialMenuPrice: showtime.specialMenuPrice,
+    specialDescription: showtime.specialDescription,
   };
 }
 

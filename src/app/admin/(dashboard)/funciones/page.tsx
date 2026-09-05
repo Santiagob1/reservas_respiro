@@ -14,6 +14,12 @@ interface Movie {
   active: boolean;
 }
 
+interface TicketTypeOption {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
 interface ShowtimeRow {
   id: string;
   startsAt: string;
@@ -23,7 +29,28 @@ interface ShowtimeRow {
   movie: { id: string; title: string };
   availability: { available: number; confirmed: number; pending: number };
   hasReservationHistory: boolean;
+  isSpecial: boolean;
+  specialAdImageUrl: string | null;
+  specialMenuPrice: number | null;
+  specialDescription: string | null;
+  enabledTicketTypeIds: string[] | null;
 }
+
+interface SpecialFormValues {
+  isSpecial: boolean;
+  specialAdImageUrl: string;
+  specialMenuPrice: number;
+  specialDescription: string;
+  disabledTicketTypeIds: string[];
+}
+
+const EMPTY_SPECIAL: SpecialFormValues = {
+  isSpecial: false,
+  specialAdImageUrl: "",
+  specialMenuPrice: 0,
+  specialDescription: "",
+  disabledTicketTypeIds: [],
+};
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Borrador (no visible aún)",
@@ -46,12 +73,15 @@ const STATUS_COLOR: Record<string, string> = {
 export default function ShowtimesPage() {
   const [showtimes, setShowtimes] = useState<ShowtimeRow[]>([]);
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [ticketTypes, setTicketTypes] = useState<TicketTypeOption[]>([]);
   const [form, setForm] = useState({ movieId: "", date: "", time: "19:00", capacity: 16 });
+  const [special, setSpecial] = useState<SpecialFormValues>(EMPTY_SPECIAL);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ movieId: "", date: "", time: "", capacity: 16 });
+  const [editSpecial, setEditSpecial] = useState<SpecialFormValues>(EMPTY_SPECIAL);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -60,8 +90,13 @@ export default function ShowtimesPage() {
     const from = new Date().toISOString();
     apiGet<ShowtimeRow[]>(`/api/admin/showtimes?from=${from}`).then(setShowtimes);
     apiGet<Movie[]>("/api/admin/movies").then((all) => setMovies(all.filter((m) => m.active)));
+    apiGet<TicketTypeOption[]>("/api/admin/ticket-types").then((all) => setTicketTypes(all.filter((t) => t.active)));
   }
   useEffect(load, []);
+
+  function enabledIdsFromDisabled(disabled: string[]): string[] {
+    return ticketTypes.filter((t) => !disabled.includes(t.id)).map((t) => t.id);
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -74,8 +109,14 @@ export default function ShowtimesPage() {
         time: form.time,
         capacity: Number(form.capacity),
         status: "DRAFT",
+        isSpecial: special.isSpecial,
+        specialAdImageUrl: special.specialAdImageUrl || null,
+        specialMenuPrice: special.isSpecial ? Number(special.specialMenuPrice) : null,
+        specialDescription: special.specialDescription || null,
+        enabledTicketTypeIds: ticketTypes.length > 0 ? enabledIdsFromDisabled(special.disabledTicketTypeIds) : undefined,
       });
       setForm({ movieId: "", date: "", time: "19:00", capacity: 16 });
+      setSpecial(EMPTY_SPECIAL);
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No pudimos crear la función.");
@@ -126,6 +167,14 @@ export default function ShowtimesPage() {
     setEditingId(s.id);
     setEditError(null);
     setEditForm({ movieId: s.movie.id, date, time, capacity: s.capacity });
+    setEditSpecial({
+      isSpecial: s.isSpecial,
+      specialAdImageUrl: s.specialAdImageUrl ?? "",
+      specialMenuPrice: s.specialMenuPrice ?? 0,
+      specialDescription: s.specialDescription ?? "",
+      disabledTicketTypeIds:
+        s.enabledTicketTypeIds === null ? [] : ticketTypes.filter((t) => !s.enabledTicketTypeIds!.includes(t.id)).map((t) => t.id),
+    });
     // La película asignada puede haberse desactivado después de programar la función;
     // igual debe verse en el selector para no perderla al editar otro campo.
     setMovies((prev) => (prev.some((m) => m.id === s.movie.id) ? prev : [...prev, { ...s.movie, active: false }]));
@@ -147,6 +196,11 @@ export default function ShowtimesPage() {
         date: editForm.date,
         time: editForm.time,
         capacity: Number(editForm.capacity),
+        isSpecial: editSpecial.isSpecial,
+        specialAdImageUrl: editSpecial.specialAdImageUrl || null,
+        specialMenuPrice: editSpecial.isSpecial ? Number(editSpecial.specialMenuPrice) : null,
+        specialDescription: editSpecial.specialDescription || null,
+        enabledTicketTypeIds: ticketTypes.length > 0 ? enabledIdsFromDisabled(editSpecial.disabledTicketTypeIds) : undefined,
       });
       setEditingId(null);
       load();
@@ -190,32 +244,35 @@ export default function ShowtimesPage() {
       </div>
 
       {!showCancelled && (
-        <form onSubmit={handleCreate} className="grid gap-4 rounded-2xl border border-line bg-ink-card p-5 sm:grid-cols-5">
-          <select
-            value={form.movieId}
-            onChange={(e) => setForm({ ...form, movieId: e.target.value })}
-            required
-            className={inputClass}
-          >
-            <option value="">Película</option>
-            {movies.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.title}
-              </option>
-            ))}
-          </select>
-          <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required className={inputClass} />
-          <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} required className={inputClass} />
-          <input
-            type="number"
-            value={form.capacity}
-            onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })}
-            required
-            className={inputClass}
-          />
-          <Button type="submit" disabled={loading}>
-            + Función
-          </Button>
+        <form onSubmit={handleCreate} className="flex flex-col gap-4 rounded-2xl border border-line bg-ink-card p-5">
+          <div className="grid gap-4 sm:grid-cols-5">
+            <select
+              value={form.movieId}
+              onChange={(e) => setForm({ ...form, movieId: e.target.value })}
+              required
+              className={inputClass}
+            >
+              <option value="">Película</option>
+              {movies.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title}
+                </option>
+              ))}
+            </select>
+            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required className={inputClass} />
+            <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} required className={inputClass} />
+            <input
+              type="number"
+              value={form.capacity}
+              onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })}
+              required
+              className={inputClass}
+            />
+            <Button type="submit" disabled={loading}>
+              + Función
+            </Button>
+          </div>
+          <SpecialFunctionFields values={special} onChange={(patch) => setSpecial((prev) => ({ ...prev, ...patch }))} ticketTypes={ticketTypes} />
         </form>
       )}
       {error && <p className="text-sm text-danger">{error}</p>}
@@ -231,7 +288,14 @@ export default function ShowtimesPage() {
                   <div key={s.id} className="rounded-2xl border border-line bg-ink-card p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="font-display text-lg text-cream">{s.movie.title}</p>
+                        <p className="font-display text-lg text-cream">
+                          {s.movie.title}
+                          {s.isSpecial && (
+                            <span className="ml-2 rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
+                              Especial
+                            </span>
+                          )}
+                        </p>
                         <p className="text-sm text-cream-dim">
                           {new Date(s.startsAt).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })} ·{" "}
                           <span className={STATUS_COLOR[s.status] ?? "text-muted"}>{STATUS_LABEL[s.status] ?? s.status}</span>
@@ -294,49 +358,56 @@ export default function ShowtimesPage() {
                       </div>
                     </div>
                     {editingId === s.id && (
-                      <form onSubmit={saveEdit} className="mt-4 grid gap-3 rounded-xl border border-line bg-ink p-4 sm:grid-cols-5">
-                        <select
-                          value={editForm.movieId}
-                          onChange={(e) => setEditForm({ ...editForm, movieId: e.target.value })}
-                          required
-                          className={inputClass}
-                        >
-                          {movies.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.title}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="date"
-                          value={editForm.date}
-                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                          required
-                          className={inputClass}
-                        />
-                        <input
-                          type="time"
-                          value={editForm.time}
-                          onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                          required
-                          className={inputClass}
-                        />
-                        <input
-                          type="number"
-                          value={editForm.capacity}
-                          onChange={(e) => setEditForm({ ...editForm, capacity: Number(e.target.value) })}
-                          required
-                          className={inputClass}
-                        />
-                        <div className="flex gap-2">
-                          <Button type="submit" disabled={editLoading}>
-                            Guardar
-                          </Button>
-                          <Button type="button" variant="secondary" onClick={cancelEdit}>
-                            Cancelar
-                          </Button>
+                      <form onSubmit={saveEdit} className="mt-4 flex flex-col gap-3 rounded-xl border border-line bg-ink p-4">
+                        <div className="grid gap-3 sm:grid-cols-5">
+                          <select
+                            value={editForm.movieId}
+                            onChange={(e) => setEditForm({ ...editForm, movieId: e.target.value })}
+                            required
+                            className={inputClass}
+                          >
+                            {movies.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.title}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="date"
+                            value={editForm.date}
+                            onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                            required
+                            className={inputClass}
+                          />
+                          <input
+                            type="time"
+                            value={editForm.time}
+                            onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                            required
+                            className={inputClass}
+                          />
+                          <input
+                            type="number"
+                            value={editForm.capacity}
+                            onChange={(e) => setEditForm({ ...editForm, capacity: Number(e.target.value) })}
+                            required
+                            className={inputClass}
+                          />
+                          <div className="flex gap-2">
+                            <Button type="submit" disabled={editLoading}>
+                              Guardar
+                            </Button>
+                            <Button type="button" variant="secondary" onClick={cancelEdit}>
+                              Cancelar
+                            </Button>
+                          </div>
                         </div>
-                        {editError && <p className="text-sm text-danger sm:col-span-5">{editError}</p>}
+                        <SpecialFunctionFields
+                          values={editSpecial}
+                          onChange={(patch) => setEditSpecial((prev) => ({ ...prev, ...patch }))}
+                          ticketTypes={ticketTypes}
+                        />
+                        {editError && <p className="text-sm text-danger">{editError}</p>}
                       </form>
                     )}
                     {expandedId === s.id && (
@@ -355,6 +426,123 @@ export default function ShowtimesPage() {
             {showCancelled ? "No hay funciones canceladas." : "No hay funciones programadas todavía."}
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SpecialFunctionFields({
+  values,
+  onChange,
+  ticketTypes,
+}: {
+  values: SpecialFormValues;
+  onChange: (patch: Partial<SpecialFormValues>) => void;
+  ticketTypes: TicketTypeOption[];
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || "No pudimos subir la imagen.");
+      onChange({ specialAdImageUrl: json.data.url as string });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "No pudimos subir la imagen.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function toggleTicketType(id: string) {
+    const set = new Set(values.disabledTicketTypeIds);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    onChange({ disabledTicketTypeIds: Array.from(set) });
+  }
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-line bg-ink-soft/40 p-4">
+      <label className="flex items-center gap-2 text-sm font-medium text-cream">
+        <input
+          type="checkbox"
+          checked={values.isSpecial}
+          onChange={(e) => onChange({ isSpecial: e.target.checked })}
+        />
+        ¿Es función especial?
+      </label>
+
+      {values.isSpecial && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <label className="text-xs text-cream-dim">Imagen anunciante</label>
+            <div className="flex items-center gap-3">
+              <label className="cursor-pointer rounded-full border border-line px-4 py-2 text-xs text-cream-dim hover:border-gold hover:text-gold">
+                {uploading ? "Subiendo..." : "Subir imagen"}
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} disabled={uploading} />
+              </label>
+              <span className="text-xs text-muted">o pega un link abajo</span>
+            </div>
+            <input
+              value={values.specialAdImageUrl}
+              onChange={(e) => onChange({ specialAdImageUrl: e.target.value })}
+              placeholder="https://... (link de la imagen del anuncio)"
+              className={inputClass}
+            />
+            {uploadError && <p className="text-xs text-danger">{uploadError}</p>}
+            {values.specialAdImageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={values.specialAdImageUrl}
+                alt="Vista previa del anuncio"
+                className="mt-1 h-32 w-full rounded-lg object-cover"
+              />
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-cream-dim">Valor del menú especial (COP, por persona)</label>
+            <input
+              type="number"
+              value={values.specialMenuPrice}
+              onChange={(e) => onChange({ specialMenuPrice: Number(e.target.value) })}
+              className={inputClass}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <label className="text-xs text-cream-dim">¿Por qué es especial?</label>
+            <textarea
+              value={values.specialDescription}
+              onChange={(e) => onChange({ specialDescription: e.target.value })}
+              rows={2}
+              className={inputClass}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-cream-dim">Productos habilitados para esta función</p>
+        <div className="flex flex-wrap gap-3">
+          {ticketTypes.map((t) => (
+            <label key={t.id} className="flex items-center gap-1.5 text-xs text-cream-dim">
+              <input
+                type="checkbox"
+                checked={!values.disabledTicketTypeIds.includes(t.id)}
+                onChange={() => toggleTicketType(t.id)}
+              />
+              {t.name}
+            </label>
+          ))}
+          {ticketTypes.length === 0 && <span className="text-xs text-muted">Cargando productos...</span>}
+        </div>
       </div>
     </div>
   );

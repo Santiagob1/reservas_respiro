@@ -133,7 +133,22 @@ model Showtime {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  reservations Reservation[]
+  // Función especial: precio de menú fijo por persona, con imagen/aviso
+  // promocional propio. El cliente ve el aviso y reserva directo a ese
+  // precio, sin elegir entre los productos normales (General/Combo/etc).
+  isSpecial          Boolean @default(false)
+  specialAdImageUrl  String?
+  specialMenuPrice   Int? // COP por persona, solo aplica si isSpecial = true
+  specialDescription String? // por qué es especial (mostrado en el aviso)
+
+  // TicketType oculto autogenerado que representa el "menú especial" de esta
+  // función, usado internamente para crear el ReservationItem (mantiene todo
+  // el historial de precios/reportes funcionando igual que un producto normal).
+  specialTicketTypeId String?     @unique
+  specialTicketType    TicketType? @relation("SpecialTicketType", fields: [specialTicketTypeId], references: [id])
+
+  reservations       Reservation[]
+  ticketTypeOverrides ShowtimeTicketType[]
 
   @@index([startsAt])
   @@index([status])
@@ -147,13 +162,35 @@ model TicketType {
   price       Int // en pesos COP, entero
   includes    String[] // lista de items incluidos
   active      Boolean  @default(true)
+  hidden      Boolean  @default(false) // no aparece en Productos ni en el sitio público (ej. menús especiales autogenerados)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  reservationItems ReservationItem[]
+  reservationItems  ReservationItem[]
+  showtimeOverrides ShowtimeTicketType[]
+  specialForShowtime Showtime? @relation("SpecialTicketType")
 
   @@map("ticket_types")
+}
+
+/**
+ * Habilita/deshabilita productos específicos para una función puntual. Si una
+ * función NO tiene ninguna fila aquí, aplica el comportamiento por defecto:
+ * todos los productos activos están disponibles (compatibilidad con
+ * funciones ya creadas). Si tiene al menos una fila, SOLO esos productos
+ * están disponibles para esa función.
+ */
+model ShowtimeTicketType {
+  id           String     @id @default(cuid())
+  showtimeId   String
+  showtime     Showtime   @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
+  ticketTypeId String
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([showtimeId, ticketTypeId])
+  @@map("showtime_ticket_types")
 }
 
 // ---------------------------------------------------------------------------
