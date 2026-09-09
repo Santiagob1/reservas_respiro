@@ -189,6 +189,11 @@ function FunctionCard({ showtime }: { showtime: PublicShowtimeDto }) {
             <p className="text-sm text-cream-dim">
               {showtime.movie.durationMinutes} min · {showtime.movie.genre} · {showtime.movie.rating}
             </p>
+            {showtime.isSpecial && (
+              <p className="mt-1 text-sm font-semibold text-gold">
+                Menú especial: {formatCOP(showtime.specialMenuPrice ?? 0)} por persona
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -196,11 +201,7 @@ function FunctionCard({ showtime }: { showtime: PublicShowtimeDto }) {
               <p className={`text-sm font-semibold ${state.tone}`}>{state.label}</p>
               {reservable && (
                 <p className={`text-xs ${low ? "font-semibold text-warning" : "text-muted"}`}>
-                  {low
-                    ? `¡Quedan solo ${showtime.available} entradas!`
-                    : showtime.isSpecial
-                      ? `${formatCOP(showtime.specialMenuPrice ?? 0)} por persona`
-                      : `${showtime.available} cupos disponibles`}
+                  {low ? `¡Quedan solo ${showtime.available} entradas!` : `${showtime.available} cupos disponibles`}
                 </p>
               )}
             </div>
