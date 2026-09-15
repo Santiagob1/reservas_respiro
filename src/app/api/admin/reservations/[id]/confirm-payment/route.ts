@@ -5,6 +5,9 @@ import { confirmReservationPayment } from "@/server/services/reservation.service
 
 const schema = z.object({
   cashReference: z.string().optional(),
+  // "Reactivar y confirmar": revive una reserva EXPIRED (pago llegó tarde, o
+  // se olvidó confirmar a tiempo) volviendo a verificar cupo disponible.
+  force: z.boolean().optional(),
 });
 
 /** "Marcar como pagada" — para pagos en efectivo, transferencia u otros registrados por admin. */
@@ -18,6 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       reservationId: id,
       confirmedById: admin.id,
       cashReference: body.cashReference,
+      force: body.force,
     });
 
     if (requiresManualReview) {
