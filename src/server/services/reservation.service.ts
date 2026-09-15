@@ -254,9 +254,15 @@ export async function listReservations(filters: ListReservationsFilters = {}) {
 /**
  * Punto único de confirmación de pago (usado por el webhook de la pasarela y
  * por "marcar como pagada" en admin). Idempotente: si la reserva ya está
- * confirmada, no hace nada. Si la reserva ya expiró/canceló, NO revive la
- * reserva automáticamente (los cupos pudieron haberse re-vendido) y deja
- * constancia para revisión manual.
+ * confirmada, no hace nada.
+ *
+ * Si la reserva ya expiró (pago llegó tarde, o el administrador olvidó
+ * confirmarla a tiempo), por defecto NO la revive automáticamente (los
+ * cupos pudieron haberse re-vendido) y deja constancia para revisión
+ * manual. Con `force: true` (botón "Reactivar y confirmar" en admin) sí la
+ * revive: vuelve a verificar cupo físico disponible en ese momento y arma
+ * una asignación de módulos nueva antes de confirmar. Una reserva CANCELLED
+ * nunca se revive por este camino (requiere una reserva nueva).
  */
 export async function confirmReservationPayment(params: {
   reservationId: string;
@@ -266,6 +272,7 @@ export async function confirmReservationPayment(params: {
   rawResponse?: Prisma.InputJsonValue;
   confirmedById?: string | null;
   cashReference?: string | null;
+  force?: boolean;
 }): Promise<{ reservation: ReservationWithDetails; requiresManualReview: boolean }> {
   return prisma.$transaction(async (tx) => {
     const reservation = await tx.reservation.findUnique({
@@ -298,10 +305,80 @@ export async function confirmReservationPayment(params: {
       });
     }
 
-    // Reserva ya no está en un estado que pueda confirmarse (expiró o se canceló):
-    // el pago queda registrado como aprobado, pero requiere revisión manual del
-    // administrador (posible reembolso) porque el cupo pudo haberse re-vendido.
     if (reservation.status !== "PENDING_PAYMENT") {
+      if (params.force && reservation.status === "EXPIRED") {
+        // Reactivación manual: vuelve a bloquear la función y a verificar cupo
+        // real en este momento (el que tenía pudo haberse re-vendido).
+        const locked = await lockShowtimeForUpdate(tx, reservation.showtimeId);
+        if (!locked) throw new ShowtimeNotFoundException();
+        const showtime = await tx.showtime.findUniqueOrThrow({ where: { id: reservation.showtimeId } });
+        if (showtime.status === "CANCELLED" || showtime.status === "FINISHED" || hasPassed(showtime.startsAt)) {
+          throw new ShowtimeNotAvailableException("La función de esta reserva ya no está disponible.");
+        }
+
+        const totalPeople = reservation.adults + reservation.children;
+        await tx.reservationModuleAssignment.deleteMany({ where: { reservationId: reservation.id } });
+        const seating = await getShowtimeSeatingState(reservation.showtimeId, tx);
+        const effectiveCapacity = Math.min(showtime.capacity, seating.physicalMax);
+        const availableByCeiling = effectiveCapacity - seating.occupiedSeats;
+        if (availableByCeiling < totalPeople) {
+          throw new InsufficientCapacityException(Math.max(0, availableByCeiling));
+        }
+        const seatingPlan = findSeatingPlan(seating.freeModules, seating.remainingAux, totalPeople);
+        if (!seatingPlan) {
+          throw new InsufficientCapacityException(Math.max(0, availableByCeiling), { unpackable: true });
+        }
+
+        const qrToken = generateQrToken(reservation.id);
+        const updated = await tx.reservation.update({
+          where: { id: reservation.id },
+          data: {
+            status: "CONFIRMED",
+            qrToken,
+            expiresAt: null,
+            statusHistory: {
+              create: [
+                {
+                  fromStatus: "EXPIRED",
+                  toStatus: "PAYMENT_APPROVED",
+                  changedById: params.confirmedById ?? null,
+                  reason: "Reactivada manualmente por el administrador (pago recibido fuera de tiempo)",
+                },
+                {
+                  fromStatus: "PAYMENT_APPROVED",
+                  toStatus: "CONFIRMED",
+                  changedById: params.confirmedById ?? null,
+                  reason: "Reserva confirmada",
+                },
+              ],
+            },
+            moduleAssignments: {
+              create: seatingPlan.map((s) => ({
+                venueModuleId: s.venueModuleId,
+                seatsOccupied: s.seatsOccupied,
+                usesAuxiliary: s.usesAuxiliary,
+              })),
+            },
+          },
+          include: RESERVATION_INCLUDE,
+        });
+
+        await recordAudit({
+          adminUserId: params.confirmedById ?? null,
+          action: "REACTIVATE_EXPIRED_RESERVATION",
+          entityType: "Reservation",
+          entityId: reservation.id,
+          details: { code: reservation.code },
+          tx,
+        });
+
+        return { reservation: updated, requiresManualReview: false };
+      }
+
+      // Reserva ya no está en un estado que pueda confirmarse (expiró o se
+      // canceló) y no se pidió reactivarla: el pago queda registrado como
+      // aprobado, pero requiere revisión manual del administrador (posible
+      // reembolso) porque el cupo pudo haberse re-vendido.
       await recordAudit({
         adminUserId: params.confirmedById ?? null,
         action: "PAYMENT_APPROVED_AFTER_EXPIRATION",
@@ -462,6 +539,138 @@ export async function cancelReservation(params: {
   });
 }
 
+/**
+ * Ajusta la cantidad de personas/productos de una reserva ya confirmada
+ * (ej. reservaron 5 puestos pero solo llegaron 4). Reemplaza por completo
+ * el set de ítems: cada línea debe corresponder a un producto que la
+ * reserva ya tenía (no agrega productos nuevos, solo ajusta cantidades o
+ * quita líneas — para cambiar de producto, cancela y crea una reserva
+ * nueva). Vuelve a calcular el total y reasigna los módulos físicos según
+ * el nuevo número de personas.
+ */
+export async function updateReservationItems(params: {
+  reservationId: string;
+  items: { ticketTypeId: string; quantity: number }[];
+  adults: number;
+  children: number;
+  adminUserId: string;
+  reason?: string;
+}): Promise<ReservationWithDetails> {
+  return prisma.$transaction(async (tx) => {
+    const reservation = await tx.reservation.findUnique({
+      where: { id: params.reservationId },
+      include: RESERVATION_INCLUDE,
+    });
+    if (!reservation) throw new ReservationNotFoundException();
+    if (!["PAYMENT_APPROVED", "CONFIRMED", "CHECKED_IN"].includes(reservation.status)) {
+      throw new InvalidReservationStateException(
+        "Solo se puede editar la cantidad de personas de una reserva ya confirmada."
+      );
+    }
+    if (params.adults < 0 || params.children < 0) {
+      throw new ValidationException("La cantidad de personas no puede ser negativa.");
+    }
+    if (params.items.length === 0) {
+      throw new ValidationException("Debe quedar al menos un producto en la reserva.");
+    }
+
+    const existingTicketTypeIds = new Set(reservation.items.map((i) => i.ticketTypeId));
+    for (const item of params.items) {
+      if (!existingTicketTypeIds.has(item.ticketTypeId)) {
+        throw new ValidationException(
+          "Solo puedes ajustar la cantidad de los productos que ya tiene la reserva. Para cambiar de producto, cancela y crea una reserva nueva."
+        );
+      }
+      if (item.quantity <= 0) {
+        throw new ValidationException("La cantidad de cada producto debe ser mayor a 0.");
+      }
+    }
+
+    const newTotalPeople = params.adults + params.children;
+    const itemsQty = params.items.reduce((sum, i) => sum + i.quantity, 0);
+    if (itemsQty !== newTotalPeople) {
+      throw new ValidationException(
+        `La cantidad de entradas (${itemsQty}) debe coincidir con el número de personas (${newTotalPeople}).`
+      );
+    }
+
+    const locked = await lockShowtimeForUpdate(tx, reservation.showtimeId);
+    if (!locked) throw new ShowtimeNotFoundException();
+    const showtime = await tx.showtime.findUniqueOrThrow({ where: { id: reservation.showtimeId } });
+
+    const pricing = await priceReservationItems(params.items, params.adults, params.children, tx);
+
+    // Libera los módulos actuales antes de re-verificar cupo: dentro de esta
+    // misma transacción (con la función bloqueada) nadie más puede tomarlos
+    // mientras tanto.
+    await tx.reservationModuleAssignment.deleteMany({ where: { reservationId: reservation.id } });
+    const seating = await getShowtimeSeatingState(reservation.showtimeId, tx);
+    const effectiveCapacity = Math.min(showtime.capacity, seating.physicalMax);
+    const availableByCeiling = effectiveCapacity - seating.occupiedSeats;
+    if (availableByCeiling < newTotalPeople) {
+      throw new InsufficientCapacityException(Math.max(0, availableByCeiling));
+    }
+    const seatingPlan = findSeatingPlan(seating.freeModules, seating.remainingAux, newTotalPeople);
+    if (!seatingPlan) {
+      throw new InsufficientCapacityException(Math.max(0, availableByCeiling), { unpackable: true });
+    }
+
+    await tx.reservationItem.deleteMany({ where: { reservationId: reservation.id } });
+
+    const oldTotalPeople = reservation.adults + reservation.children;
+    const updated = await tx.reservation.update({
+      where: { id: reservation.id },
+      data: {
+        adults: params.adults,
+        children: params.children,
+        totalAmount: pricing.totalAmount,
+        items: {
+          create: pricing.items.map((i) => ({
+            ticketTypeId: i.ticketTypeId,
+            ticketTypeName: i.ticketTypeName,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            total: i.total,
+          })),
+        },
+        moduleAssignments: {
+          create: seatingPlan.map((s) => ({
+            venueModuleId: s.venueModuleId,
+            seatsOccupied: s.seatsOccupied,
+            usesAuxiliary: s.usesAuxiliary,
+          })),
+        },
+        statusHistory: {
+          create: {
+            fromStatus: reservation.status,
+            toStatus: reservation.status,
+            changedById: params.adminUserId,
+            reason: params.reason || `Editada: ${oldTotalPeople} → ${newTotalPeople} personas`,
+          },
+        },
+      },
+      include: RESERVATION_INCLUDE,
+    });
+
+    await recordAudit({
+      adminUserId: params.adminUserId,
+      action: "EDIT_RESERVATION_ITEMS",
+      entityType: "Reservation",
+      entityId: reservation.id,
+      details: {
+        code: reservation.code,
+        oldTotalPeople,
+        newTotalPeople,
+        oldTotalAmount: reservation.totalAmount,
+        newTotalAmount: pricing.totalAmount,
+      },
+      tx,
+    });
+
+    return updated;
+  });
+}
+
 export async function rescheduleReservation(params: {
   reservationId: string;
   newShowtimeId: string;
@@ -473,9 +682,13 @@ export async function rescheduleReservation(params: {
       include: RESERVATION_INCLUDE,
     });
     if (!reservation) throw new ReservationNotFoundException();
-    if (reservation.status !== "CONFIRMED") {
+    // Además de reservas ya confirmadas, se permite reagendar una EXPIRED:
+    // es la salida cuando el cliente pagó tarde o al administrador se le
+    // pasó confirmar, y para cuando ya se intentó reactivarla a la función
+    // original ("Reactivar y confirmar") pero ya no quedaba cupo ahí.
+    if (!["CONFIRMED", "EXPIRED"].includes(reservation.status)) {
       throw new InvalidReservationStateException(
-        "Solo se pueden reagendar reservas confirmadas."
+        "Solo se pueden reagendar reservas confirmadas o expiradas."
       );
     }
     if (reservation.showtimeId === params.newShowtimeId) {
@@ -529,6 +742,20 @@ export async function rescheduleReservation(params: {
             unitPrice: i.unitPrice,
             total: i.total,
           })),
+        },
+        // El pago ya aprobado se conserva en la reserva nueva: el dinero ya
+        // se cobró, reagendar solo cambia la función, no el estado del pago.
+        payments: {
+          create: reservation.payments
+            .filter((p) => p.status === "APPROVED")
+            .map((p) => ({
+              method: p.method,
+              status: "APPROVED",
+              amount: p.amount,
+              cashReference: p.cashReference,
+              confirmedById: p.confirmedById,
+              confirmedAt: p.confirmedAt,
+            })),
         },
         statusHistory: {
           create: {
