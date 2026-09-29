@@ -50,6 +50,19 @@ export async function getReport(from: Date, to: Date) {
   ).reduce((sum, n) => sum + n, 0);
   const avgTicket = seenReservations.size ? Math.round(totalRevenue / seenReservations.size) : 0;
 
+  // Reservas canceladas en el período (por cuándo se canceló, no por la
+  // función): aparte de las ventas, para ver cuánto se perdió sin sumarlo
+  // a los ingresos reales.
+  const cancelledReservations = await prisma.reservation.findMany({
+    where: { status: "CANCELLED", cancelledAt: { gte: from, lte: to } },
+    select: { totalAmount: true, adults: true, children: true },
+  });
+  const cancelled = {
+    count: cancelledReservations.length,
+    amount: cancelledReservations.reduce((sum, r) => sum + r.totalAmount, 0),
+    ticketsLost: cancelledReservations.reduce((sum, r) => sum + r.adults + r.children, 0),
+  };
+
   return {
     byDay: Array.from(byDay.values())
       .map((d) => ({ date: d.date, reservations: d.reservations.size, revenue: d.revenue, ticketsSold: d.ticketsSold }))
@@ -61,5 +74,6 @@ export async function getReport(from: Date, to: Date) {
       ticketsSold: totalTickets,
       averageTicket: avgTicket,
     },
+    cancelled,
   };
 }
