@@ -11,6 +11,7 @@ interface Report {
   byDay: { date: string; reservations: number; revenue: number; ticketsSold: number }[];
   byPaymentMethod: Record<string, number>;
   totals: { reservations: number; revenue: number; ticketsSold: number; averageTicket: number };
+  cancelled: { count: number; amount: number; ticketsLost: number };
 }
 
 function toDateKey(date: Date): string {
@@ -130,17 +131,29 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
+
+          <div className="rounded-2xl border border-danger/30 bg-danger/5 p-5">
+            <h2 className="mb-1 font-display text-xl text-cream">Reservas canceladas</h2>
+            <p className="mb-3 text-xs text-muted">
+              Aparte de las ventas de arriba — no está incluido en los ingresos ni en el total de reservas.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Stat label="Canceladas" value={String(report.cancelled.count)} tone="text-danger" />
+              <Stat label="Valor cancelado" value={formatCOP(report.cancelled.amount)} tone="text-danger" />
+              <Stat label="Entradas perdidas" value={String(report.cancelled.ticketsLost)} tone="text-danger" />
+            </div>
+          </div>
         </>
       )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="rounded-2xl border border-line bg-ink-card p-5">
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className="font-display text-2xl text-cream">{value}</p>
+      <p className={`font-display text-2xl ${tone ?? "text-cream"}`}>{value}</p>
     </div>
   );
 }
