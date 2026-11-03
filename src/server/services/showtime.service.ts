@@ -6,6 +6,7 @@ import {
   MovieHasReservationsException,
   ShowtimeHasReservationsException,
   ShowtimeNotFoundException,
+  ShowtimeRoomChangeBlockedException,
   ValidationException,
 } from "@/server/domain/errors";
 import { getShowtimeAvailability } from "@/server/services/availability.service";
@@ -27,6 +28,8 @@ export interface SpecialFields {
 
 export interface ShowtimeInput extends SpecialFields {
   movieId: string;
+  /** Sala donde se presenta. Las funciones nuevas siempre deberían traerla. */
+  roomId?: string | null;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   capacity: number;
@@ -53,26 +56,27 @@ export async function listShowtimes(filters: {
       // día parezca vacío); solo se ocultan borradores, canceladas y finalizadas.
       ...(filters.publicOnly ? { status: { in: ["PUBLISHED", "SOLD_OUT", "BOOKING_CLOSED"] } as never } : {}),
     },
-    include: { movie: true },
+    include: { movie: true, room: true },
     orderBy: { startsAt: "asc" },
   });
 }
 
 export async function getShowtimeById(id: string) {
-  const showtime = await prisma.showtime.findUnique({ where: { id }, include: { movie: true } });
+  const showtime = await prisma.showtime.findUnique({ where: { id }, include: { movie: true, room: true } });
   if (!showtime) throw new ShowtimeNotFoundException();
   return showtime;
 }
 
 export async function createShowtime(input: ShowtimeInput) {
   validateShowtimeInput(input);
-  await validateCapacityAgainstRoom(input.capacity);
+  await validateCapacityAgainstRoom(input.capacity, input.roomId ?? null);
   validateSpecialFields(input);
   const startsAt = zonedDateTimeToUtc(input.date, input.time);
 
   const showtime = await prisma.showtime.create({
     data: {
       movieId: input.movieId,
+      roomId: input.roomId ?? null,
       startsAt,
       capacity: input.capacity,
       status: input.status ?? "DRAFT",
@@ -111,11 +115,25 @@ export async function updateShowtime(
     data.movieId = patch.movieId;
   }
 
-  if (patch.capacity !== undefined && patch.capacity !== showtime.capacity) {
-    await validateCapacityAgainstRoom(patch.capacity);
+  const roomChanged = patch.roomId !== undefined && (patch.roomId ?? null) !== showtime.roomId;
+  if (roomChanged) {
+    const activeCount = await countActiveReservations(id);
+    if (activeCount > 0) {
+      throw new ShowtimeRoomChangeBlockedException();
+    }
+    data.roomId = patch.roomId ?? null;
+  }
+  const finalRoomId = roomChanged ? (patch.roomId ?? null) : showtime.roomId;
+
+  const capacityChanged = patch.capacity !== undefined && patch.capacity !== showtime.capacity;
+  if (capacityChanged || roomChanged) {
+    const finalCapacity = patch.capacity ?? showtime.capacity;
+    await validateCapacityAgainstRoom(finalCapacity, finalRoomId);
+  }
+  if (capacityChanged) {
     const availability = await getShowtimeAvailability(id);
     const committed = availability.confirmed + availability.pending;
-    if (patch.capacity < committed) {
+    if (patch.capacity! < committed) {
       throw new CapacityBelowCommittedException(committed);
     }
     data.capacity = patch.capacity;
@@ -199,11 +217,17 @@ export async function countActiveReservations(showtimeId: string): Promise<numbe
   });
 }
 
-async function validateCapacityAgainstRoom(capacity: number) {
-  const room = await getPhysicalRoomCapacity();
-  if (capacity > room.max) {
+async function validateCapacityAgainstRoom(capacity: number, roomId: string | null) {
+  let roomLabel = "de la sala";
+  if (roomId) {
+    const room = await prisma.room.findUnique({ where: { id: roomId } });
+    if (!room || !room.active) throw new ValidationException("La sala seleccionada no existe o está inactiva.");
+    roomLabel = `de la ${room.name}`;
+  }
+  const physical = await getPhysicalRoomCapacity(roomId);
+  if (capacity > physical.max) {
     throw new ValidationException(
-      `La capacidad no puede superar el máximo físico de la sala (${room.max} personas con todos los módulos auxiliares en uso).`
+      `La capacidad no puede superar el máximo físico ${roomLabel} (${physical.max} personas con todas las piezas auxiliares en uso).`
     );
   }
 }

@@ -70,18 +70,28 @@ async function main() {
     if (!existing) await prisma.ticketType.create({ data: t });
   }
 
-  // --- Layout físico de la sala: 4 módulos pareja + 2 módulos trío ---
+  // --- Salas: Sala 1 = 4 módulos pareja, Sala 2 = 2 módulos trío ---
+  // (los ids son los mismos que crea la migración 20261103150000_rooms)
+  const roomsData = [
+    { id: "room_sala_1", name: "Sala 1", sortOrder: 1 },
+    { id: "room_sala_2", name: "Sala 2", sortOrder: 2 },
+  ];
+  for (const r of roomsData) {
+    await prisma.room.upsert({ where: { id: r.id }, update: {}, create: r });
+  }
+
   const venueModulesData = [
-    { type: "COUPLE" as const, label: "Módulo pareja 1", baseCapacity: 2, sortOrder: 1 },
-    { type: "COUPLE" as const, label: "Módulo pareja 2", baseCapacity: 2, sortOrder: 2 },
-    { type: "COUPLE" as const, label: "Módulo pareja 3", baseCapacity: 2, sortOrder: 3 },
-    { type: "COUPLE" as const, label: "Módulo pareja 4", baseCapacity: 2, sortOrder: 4 },
-    { type: "TRIO" as const, label: "Módulo trío A", baseCapacity: 3, sortOrder: 5 },
-    { type: "TRIO" as const, label: "Módulo trío B", baseCapacity: 3, sortOrder: 6 },
+    { type: "COUPLE" as const, label: "Módulo pareja 1", baseCapacity: 2, sortOrder: 1, roomId: "room_sala_1" },
+    { type: "COUPLE" as const, label: "Módulo pareja 2", baseCapacity: 2, sortOrder: 2, roomId: "room_sala_1" },
+    { type: "COUPLE" as const, label: "Módulo pareja 3", baseCapacity: 2, sortOrder: 3, roomId: "room_sala_1" },
+    { type: "COUPLE" as const, label: "Módulo pareja 4", baseCapacity: 2, sortOrder: 4, roomId: "room_sala_1" },
+    { type: "TRIO" as const, label: "Módulo trío A", baseCapacity: 3, sortOrder: 5, roomId: "room_sala_2" },
+    { type: "TRIO" as const, label: "Módulo trío B", baseCapacity: 3, sortOrder: 6, roomId: "room_sala_2" },
   ];
   for (const m of venueModulesData) {
     const existing = await prisma.venueModule.findFirst({ where: { label: m.label } });
     if (!existing) await prisma.venueModule.create({ data: m });
+    else if (!existing.roomId) await prisma.venueModule.update({ where: { id: existing.id }, data: { roomId: m.roomId } });
   }
 
   // --- Películas ---
@@ -132,7 +142,8 @@ async function main() {
         data: {
           movieId: movie.id,
           startsAt,
-          capacity: 16,
+          roomId: "room_sala_1",
+          capacity: 10,
           status: "PUBLISHED",
           weekPublished: true,
         },

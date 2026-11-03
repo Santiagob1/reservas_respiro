@@ -7,15 +7,18 @@ import { getSetting } from "@/server/services/settings.service";
  * Motor de asignación de asientos por módulos físicos (sección "particularidades
  * del cine"). La sala NO tiene cupos genéricos: tiene sofás fijos.
  *
- *  - 4 módulos "pareja" (1.50m) — capacidad base 2 personas.
- *  - 2 módulos "trío" (2.00m) — capacidad base 3 personas.
+ * Hay dos salas independientes y cada función se presenta en una:
+ *  - Sala 1: 4 módulos "pareja" (1.50m) — capacidad base 2 personas.
+ *  - Sala 2: 2 módulos "trío" (2.00m) — capacidad base 3 personas.
  *  - N piezas auxiliares (0.50m, Setting `auxiliary_module_count`, por
- *    defecto 2) — cada una se pega a UN módulo para sumarle +1 persona.
- *    Nunca forman un asiento independiente.
+ *    defecto 2, por función) — cada una se pega a UN módulo para sumarle +1
+ *    persona. Nunca forman un asiento independiente; cuando se usan las N
+ *    ya no se puede ampliar más ningún módulo de esa función.
  *
- * Capacidad física: base 4×2 + 2×3 = 14 personas. Con las auxiliares al
- * máximo: 14 + 2 = 16. Pero esos 16 solo se alcanzan si las reservas se
- * empacan bien — de ahí el algoritmo de empaque de abajo.
+ * Capacidad física: Sala 1 = 4×2 = 8 (máx. 10 con 2 auxiliares); Sala 2 =
+ * 2×3 = 6 (máx. 8). Esos máximos solo se alcanzan si las reservas se empacan
+ * bien — de ahí el algoritmo de empaque de abajo. Las funciones anteriores a
+ * las salas (roomId null) siguen usando todos los módulos juntos (14 / 16).
  *
  * Cada reserva ocupa uno o más módulos completos (nunca comparte un módulo
  * con otra reserva). Al crear una reserva se busca la combinación de
@@ -52,13 +55,28 @@ export interface ShowtimeSeatingState {
   remainingAux: number;
 }
 
-export async function getActiveVenueModules(client: Client = prisma) {
-  return client.venueModule.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } });
+/**
+ * Módulos activos de una sala. Con `roomId = null` (funciones anteriores a las
+ * salas separadas) se usan todos los módulos, como antes.
+ */
+export async function getActiveVenueModules(roomId: string | null = null, client: Client = prisma) {
+  return client.venueModule.findMany({
+    where: { active: true, ...(roomId ? { roomId } : {}) },
+    orderBy: { sortOrder: "asc" },
+  });
 }
 
-export async function getPhysicalRoomCapacity(client: Client = prisma): Promise<{ base: number; max: number }> {
+async function getShowtimeRoomId(showtimeId: string, client: Client): Promise<string | null> {
+  const showtime = await client.showtime.findUnique({ where: { id: showtimeId }, select: { roomId: true } });
+  return showtime?.roomId ?? null;
+}
+
+export async function getPhysicalRoomCapacity(
+  roomId: string | null = null,
+  client: Client = prisma
+): Promise<{ base: number; max: number }> {
   const [modules, auxCount] = await Promise.all([
-    getActiveVenueModules(client),
+    getActiveVenueModules(roomId, client),
     getSetting("auxiliary_module_count"),
   ]);
   const base = modules.reduce((sum, m) => sum + m.baseCapacity, 0);
@@ -69,8 +87,9 @@ export async function getShowtimeSeatingState(
   showtimeId: string,
   client: Client = prisma
 ): Promise<ShowtimeSeatingState> {
+  const roomId = await getShowtimeRoomId(showtimeId, client);
   const [modules, auxCount, assignments] = await Promise.all([
-    getActiveVenueModules(client),
+    getActiveVenueModules(roomId, client),
     getSetting("auxiliary_module_count"),
     client.reservationModuleAssignment.findMany({
       where: {
@@ -123,8 +142,9 @@ export async function getShowtimeSeatingDetail(
   showtimeId: string,
   client: Client = prisma
 ): Promise<{ modules: ShowtimeSeatingModuleDetail[]; remainingAux: number; auxCount: number }> {
+  const roomId = await getShowtimeRoomId(showtimeId, client);
   const [modules, auxCount, assignments] = await Promise.all([
-    getActiveVenueModules(client),
+    getActiveVenueModules(roomId, client),
     getSetting("auxiliary_module_count"),
     client.reservationModuleAssignment.findMany({
       where: {

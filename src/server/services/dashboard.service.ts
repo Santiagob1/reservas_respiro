@@ -26,7 +26,7 @@ export async function getTodayShowtimes() {
 
   const showtimes = await prisma.showtime.findMany({
     where: { startsAt: { gte: from, lte: to } },
-    include: { movie: true },
+    include: { movie: true, room: true },
     orderBy: { startsAt: "asc" },
   });
 
@@ -56,6 +56,7 @@ export async function getTodayShowtimes() {
       return {
         id: showtime.id,
         movieTitle: showtime.movie.title,
+        roomName: showtime.room?.name ?? null,
         dateLabel: formatCinemaDate(showtime.startsAt),
         timeLabel: formatCinemaTime(showtime.startsAt),
         status: showtime.status,

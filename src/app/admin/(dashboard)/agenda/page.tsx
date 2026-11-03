@@ -24,6 +24,7 @@ interface ShowtimeRow {
   capacity: number;
   status: string;
   movie: { id: string; title: string };
+  room: { name: string } | null;
   availability: { available: number; confirmed: number; pending: number };
 }
 
@@ -188,6 +189,7 @@ function AdminAgendaContent() {
                 <p className="font-display text-xl text-cream">{s.movie.title}</p>
                 <p className="text-sm text-gold">
                   {new Date(s.startsAt).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })}
+                  {s.room ? ` · ${s.room.name}` : ""}
                 </p>
               </div>
               <span className="text-xs text-muted">{SHOWTIME_STATUS_LABEL[s.status] ?? s.status}</span>

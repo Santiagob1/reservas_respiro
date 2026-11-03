@@ -14,6 +14,13 @@ interface Movie {
   active: boolean;
 }
 
+interface RoomOption {
+  id: string;
+  name: string;
+  baseCapacity: number;
+  maxCapacity: number;
+}
+
 interface TicketTypeOption {
   id: string;
   name: string;
@@ -27,6 +34,8 @@ interface ShowtimeRow {
   status: string;
   weekPublished: boolean;
   movie: { id: string; title: string };
+  roomId: string | null;
+  room: { name: string } | null;
   availability: { available: number; confirmed: number; pending: number };
   hasReservationHistory: boolean;
   isSpecial: boolean;
@@ -74,13 +83,14 @@ export default function ShowtimesPage() {
   const [showtimes, setShowtimes] = useState<ShowtimeRow[]>([]);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [ticketTypes, setTicketTypes] = useState<TicketTypeOption[]>([]);
-  const [form, setForm] = useState({ movieId: "", date: "", time: "19:00", capacity: 16 });
+  const [rooms, setRooms] = useState<RoomOption[]>([]);
+  const [form, setForm] = useState({ movieId: "", roomId: "", date: "", time: "19:00", capacity: 16 });
   const [special, setSpecial] = useState<SpecialFormValues>(EMPTY_SPECIAL);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ movieId: "", date: "", time: "", capacity: 16 });
+  const [editForm, setEditForm] = useState({ movieId: "", roomId: "", date: "", time: "", capacity: 16 });
   const [editSpecial, setEditSpecial] = useState<SpecialFormValues>(EMPTY_SPECIAL);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -91,8 +101,17 @@ export default function ShowtimesPage() {
     apiGet<ShowtimeRow[]>(`/api/admin/showtimes?from=${from}`).then(setShowtimes);
     apiGet<Movie[]>("/api/admin/movies").then((all) => setMovies(all.filter((m) => m.active)));
     apiGet<TicketTypeOption[]>("/api/admin/ticket-types").then((all) => setTicketTypes(all.filter((t) => t.active)));
+    apiGet<RoomOption[]>("/api/admin/rooms").then((all) => {
+      setRooms(all);
+      // Sala por defecto para funciones nuevas: la primera, con su capacidad máxima.
+      setForm((prev) => (prev.roomId || all.length === 0 ? prev : { ...prev, roomId: all[0].id, capacity: all[0].maxCapacity }));
+    });
   }
   useEffect(load, []);
+
+  function roomMax(roomId: string): number | null {
+    return rooms.find((r) => r.id === roomId)?.maxCapacity ?? null;
+  }
 
   function enabledIdsFromDisabled(disabled: string[]): string[] {
     return ticketTypes.filter((t) => !disabled.includes(t.id)).map((t) => t.id);
@@ -105,6 +124,7 @@ export default function ShowtimesPage() {
     try {
       await apiPost("/api/admin/showtimes", {
         movieId: form.movieId,
+        roomId: form.roomId,
         date: form.date,
         time: form.time,
         capacity: Number(form.capacity),
@@ -115,7 +135,13 @@ export default function ShowtimesPage() {
         specialDescription: special.specialDescription || null,
         enabledTicketTypeIds: ticketTypes.length > 0 ? enabledIdsFromDisabled(special.disabledTicketTypeIds) : undefined,
       });
-      setForm({ movieId: "", date: "", time: "19:00", capacity: 16 });
+      setForm({
+        movieId: "",
+        roomId: form.roomId,
+        date: "",
+        time: "19:00",
+        capacity: roomMax(form.roomId) ?? 16,
+      });
       setSpecial(EMPTY_SPECIAL);
       load();
     } catch (err) {
@@ -166,7 +192,7 @@ export default function ShowtimesPage() {
     const { date, time } = toDateTimeParts(new Date(s.startsAt));
     setEditingId(s.id);
     setEditError(null);
-    setEditForm({ movieId: s.movie.id, date, time, capacity: s.capacity });
+    setEditForm({ movieId: s.movie.id, roomId: s.roomId ?? "", date, time, capacity: s.capacity });
     setEditSpecial({
       isSpecial: s.isSpecial,
       specialAdImageUrl: s.specialAdImageUrl ?? "",
@@ -193,6 +219,7 @@ export default function ShowtimesPage() {
     try {
       await apiPatch(`/api/admin/showtimes/${editingId}`, {
         movieId: editForm.movieId,
+        ...(editForm.roomId ? { roomId: editForm.roomId } : {}),
         date: editForm.date,
         time: editForm.time,
         capacity: Number(editForm.capacity),
@@ -245,7 +272,7 @@ export default function ShowtimesPage() {
 
       {!showCancelled && (
         <form onSubmit={handleCreate} className="flex flex-col gap-4 rounded-2xl border border-line bg-ink-card p-5">
-          <div className="grid gap-4 sm:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-6">
             <select
               value={form.movieId}
               onChange={(e) => setForm({ ...form, movieId: e.target.value })}
@@ -256,6 +283,23 @@ export default function ShowtimesPage() {
               {movies.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.title}
+                </option>
+              ))}
+            </select>
+            <select
+              value={form.roomId}
+              onChange={(e) => {
+                const max = roomMax(e.target.value);
+                setForm({ ...form, roomId: e.target.value, capacity: max ?? form.capacity });
+              }}
+              required
+              aria-label="Sala"
+              className={inputClass}
+            >
+              <option value="">Sala</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} (hasta {r.maxCapacity})
                 </option>
               ))}
             </select>
@@ -298,6 +342,7 @@ export default function ShowtimesPage() {
                         </p>
                         <p className="text-sm text-cream-dim">
                           {new Date(s.startsAt).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })} ·{" "}
+                          <span className="text-cream">{s.room?.name ?? "Sala anterior (combinada)"}</span> ·{" "}
                           <span className={STATUS_COLOR[s.status] ?? "text-muted"}>{STATUS_LABEL[s.status] ?? s.status}</span>
                         </p>
                         <p className="text-xs text-muted">
@@ -359,7 +404,7 @@ export default function ShowtimesPage() {
                     </div>
                     {editingId === s.id && (
                       <form onSubmit={saveEdit} className="mt-4 flex flex-col gap-3 rounded-xl border border-line bg-ink p-4">
-                        <div className="grid gap-3 sm:grid-cols-5">
+                        <div className="grid gap-3 sm:grid-cols-6">
                           <select
                             value={editForm.movieId}
                             onChange={(e) => setEditForm({ ...editForm, movieId: e.target.value })}
@@ -369,6 +414,26 @@ export default function ShowtimesPage() {
                             {movies.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.title}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={editForm.roomId}
+                            onChange={(e) => {
+                              const max = roomMax(e.target.value);
+                              setEditForm({
+                                ...editForm,
+                                roomId: e.target.value,
+                                capacity: max !== null ? Math.min(editForm.capacity, max) : editForm.capacity,
+                              });
+                            }}
+                            aria-label="Sala"
+                            className={inputClass}
+                          >
+                            {!editForm.roomId && <option value="">Sala anterior (combinada)</option>}
+                            {rooms.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name} (hasta {r.maxCapacity})
                               </option>
                             ))}
                           </select>

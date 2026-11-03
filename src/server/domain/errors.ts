@@ -134,6 +134,16 @@ export class ShowtimeHasReservationsException extends DomainError {
   }
 }
 
+export class ShowtimeRoomChangeBlockedException extends DomainError {
+  constructor() {
+    super(
+      "SHOWTIME_ROOM_CHANGE_BLOCKED",
+      "No puedes cambiar la sala de una función que ya tiene reservas activas, porque ya tienen sus asientos asignados en la sala actual. Reagenda o cancela esas reservas primero.",
+      409
+    );
+  }
+}
+
 export class AlreadyCheckedInException extends DomainError {
   constructor(checkedInAt: Date) {
     super(

@@ -27,10 +27,12 @@ export async function createTestShowtime(params: {
   capacity: number;
   startsAt?: Date;
   status?: "DRAFT" | "PUBLISHED";
+  roomId?: string | null;
 }) {
   return prisma.showtime.create({
     data: {
       movieId: params.movieId,
+      roomId: params.roomId ?? null,
       capacity: params.capacity,
       startsAt: params.startsAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
       status: params.status ?? "PUBLISHED",
@@ -44,17 +46,26 @@ export async function createTestShowtime(params: {
  * las pruebas asumen que ya existe (creado por `prisma/seed.ts`) y solo lo
  * siembra aquí como red de seguridad si corren contra una base recién migrada.
  */
+export const ROOM_1_ID = "room_sala_1";
+export const ROOM_2_ID = "room_sala_2";
+
 export async function ensureVenueModules() {
+  for (const [id, name, sortOrder] of [
+    [ROOM_1_ID, "Sala 1", 1],
+    [ROOM_2_ID, "Sala 2", 2],
+  ] as const) {
+    await prisma.room.upsert({ where: { id }, update: {}, create: { id, name, sortOrder } });
+  }
   const count = await prisma.venueModule.count();
   if (count > 0) return;
   await prisma.venueModule.createMany({
     data: [
-      { type: "COUPLE", label: "Módulo pareja 1", baseCapacity: 2, sortOrder: 1 },
-      { type: "COUPLE", label: "Módulo pareja 2", baseCapacity: 2, sortOrder: 2 },
-      { type: "COUPLE", label: "Módulo pareja 3", baseCapacity: 2, sortOrder: 3 },
-      { type: "COUPLE", label: "Módulo pareja 4", baseCapacity: 2, sortOrder: 4 },
-      { type: "TRIO", label: "Módulo trío A", baseCapacity: 3, sortOrder: 5 },
-      { type: "TRIO", label: "Módulo trío B", baseCapacity: 3, sortOrder: 6 },
+      { type: "COUPLE", label: "Módulo pareja 1", baseCapacity: 2, sortOrder: 1, roomId: ROOM_1_ID },
+      { type: "COUPLE", label: "Módulo pareja 2", baseCapacity: 2, sortOrder: 2, roomId: ROOM_1_ID },
+      { type: "COUPLE", label: "Módulo pareja 3", baseCapacity: 2, sortOrder: 3, roomId: ROOM_1_ID },
+      { type: "COUPLE", label: "Módulo pareja 4", baseCapacity: 2, sortOrder: 4, roomId: ROOM_1_ID },
+      { type: "TRIO", label: "Módulo trío A", baseCapacity: 3, sortOrder: 5, roomId: ROOM_2_ID },
+      { type: "TRIO", label: "Módulo trío B", baseCapacity: 3, sortOrder: 6, roomId: ROOM_2_ID },
     ],
   });
 }

@@ -68,12 +68,17 @@ export function AgendaPicker({
 
   const days = useMemo(() => buildWindow(todayKey, offset), [todayKey, offset]);
   const byDate = useMemo(() => {
-    const map = new Map<string, PublicShowtimeDto>();
-    for (const s of showtimes) map.set(s.dateKey, s);
+    const map = new Map<string, PublicShowtimeDto[]>();
+    for (const s of showtimes) {
+      const list = map.get(s.dateKey) ?? [];
+      list.push(s);
+      map.set(s.dateKey, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     return map;
   }, [showtimes]);
 
-  const selectedShowtime = byDate.get(selectedKey);
+  const selectedShowtimes = byDate.get(selectedKey) ?? [];
 
   function shiftWindow(newOffset: number) {
     setOffset(newOffset);
@@ -131,8 +136,12 @@ export function AgendaPicker({
         </button>
       </div>
 
-      {selectedShowtime ? (
-        <FunctionCard showtime={selectedShowtime} />
+      {selectedShowtimes.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          {selectedShowtimes.map((showtime) => (
+            <FunctionCard key={showtime.id} showtime={showtime} />
+          ))}
+        </div>
       ) : (
         <div className="rounded-2xl border border-line bg-ink-card p-8 text-center">
           <p className="text-cream-dim">No hay función programada para este día.</p>
@@ -144,58 +153,58 @@ export function AgendaPicker({
 }
 
 function FunctionCard({ showtime }: { showtime: PublicShowtimeDto }) {
-  const [showAd, setShowAd] = useState(false);
   const state = STATE_LABEL[showtime.state];
   const reservable = showtime.state === "AVAILABLE" || showtime.state === "LOW_AVAILABILITY";
   const soldOut = showtime.state === "SOLD_OUT";
   const low = showtime.state === "LOW_AVAILABILITY";
 
   return (
-    <>
-      <div className="flex flex-col gap-5 rounded-2xl border border-line bg-ink-card p-5 sm:flex-row">
-        <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-xl bg-ink-soft sm:h-auto sm:w-32">
-          {showtime.movie.posterUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={showtime.movie.posterUrl}
-              alt={`Póster de ${showtime.movie.title}`}
-              className={`h-full w-full object-cover transition-opacity ${soldOut ? "opacity-30" : ""}`}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs text-muted">Sin imagen</div>
-          )}
-          {soldOut && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="-rotate-12 rounded border-2 border-danger bg-ink/90 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-danger shadow-lg">
-                Agotado
+    <div className="flex flex-col gap-5 rounded-2xl border border-line bg-ink-card p-5 sm:flex-row">
+      <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-xl bg-ink-soft sm:h-auto sm:w-32">
+        {showtime.movie.posterUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={showtime.movie.posterUrl}
+            alt={`Póster de ${showtime.movie.title}`}
+            className={`h-full w-full object-cover transition-opacity ${soldOut ? "opacity-30" : ""}`}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-muted">Sin imagen</div>
+        )}
+        {soldOut && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="-rotate-12 rounded border-2 border-danger bg-ink/90 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-danger shadow-lg">
+              Agotado
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col justify-between gap-3">
+        <div>
+          <p className="text-xs text-gold">
+            {showtime.dateLabel} · {showtime.timeLabel}
+            {showtime.roomName ? ` · ${showtime.roomName}` : ""}
+          </p>
+          <h3 className="font-display text-2xl text-cream">
+            {showtime.movie.title}
+            {showtime.isSpecial && (
+              <span className="ml-2 rounded-full bg-gold/15 px-2.5 py-1 align-middle text-xs font-semibold uppercase tracking-wide text-gold">
+                ★ Especial
               </span>
-            </div>
+            )}
+          </h3>
+          <p className="text-sm text-cream-dim">
+            {showtime.movie.durationMinutes} min · {showtime.movie.genre} · {showtime.movie.rating}
+          </p>
+          {showtime.isSpecial && (
+            <p className="mt-1 text-sm font-semibold text-gold">
+              Menú especial: {formatCOP(showtime.specialMenuPrice ?? 0)} por persona
+            </p>
           )}
         </div>
 
-        <div className="flex flex-1 flex-col justify-between gap-3">
-          <div>
-            <p className="text-xs text-gold">
-              {showtime.dateLabel} · {showtime.timeLabel}
-            </p>
-            <h3 className="font-display text-2xl text-cream">
-              {showtime.movie.title}
-              {showtime.isSpecial && (
-                <span className="ml-2 rounded-full bg-gold/15 px-2.5 py-1 align-middle text-xs font-semibold uppercase tracking-wide text-gold">
-                  ★ Especial
-                </span>
-              )}
-            </h3>
-            <p className="text-sm text-cream-dim">
-              {showtime.movie.durationMinutes} min · {showtime.movie.genre} · {showtime.movie.rating}
-            </p>
-            {showtime.isSpecial && (
-              <p className="mt-1 text-sm font-semibold text-gold">
-                Menú especial: {formatCOP(showtime.specialMenuPrice ?? 0)} por persona
-              </p>
-            )}
-          </div>
-
+        <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className={`text-sm font-semibold ${state.tone}`}>{state.label}</p>
@@ -207,74 +216,21 @@ function FunctionCard({ showtime }: { showtime: PublicShowtimeDto }) {
             </div>
 
             {reservable ? (
-              showtime.isSpecial ? (
-                <button
-                  type="button"
-                  onClick={() => setShowAd(true)}
-                  className="rounded-full bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-gold-soft"
-                >
-                  Reservar
-                </button>
-              ) : (
-                <Link
-                  href={`/reservar?showtimeId=${showtime.id}`}
-                  className="rounded-full bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-gold-soft"
-                >
-                  Reservar
-                </Link>
-              )
+              <Link
+                href={`/reservar?showtimeId=${showtime.id}`}
+                className="rounded-full bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-gold-soft"
+              >
+                Continuar →
+              </Link>
             ) : (
               <span className="rounded-full border border-line px-6 py-2.5 text-sm text-muted">No disponible</span>
             )}
           </div>
-        </div>
-      </div>
-
-      {showAd && <SpecialAdModal showtime={showtime} onClose={() => setShowAd(false)} />}
-    </>
-  );
-}
-
-function SpecialAdModal({ showtime, onClose }: { showtime: PublicShowtimeDto; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl border border-line bg-ink-card"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {showtime.specialAdImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={showtime.specialAdImageUrl} alt={`Anuncio: ${showtime.movie.title}`} className="w-full object-cover" />
-        )}
-        <div className="flex flex-col gap-3 p-5">
-          <h3 className="font-display text-2xl text-cream">{showtime.movie.title}</h3>
-          <p className="text-sm text-gold">
-            {showtime.dateLabel} · {showtime.timeLabel}
-          </p>
-          {showtime.specialDescription && <p className="text-sm text-cream-dim">{showtime.specialDescription}</p>}
-          <p className="text-sm font-semibold text-cream">
-            {formatCOP(showtime.specialMenuPrice ?? 0)} por persona
-          </p>
-          <div className="mt-2 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-full border border-line px-4 py-2.5 text-sm text-cream-dim hover:border-gold hover:text-gold"
-            >
-              Cerrar
-            </button>
-            <Link
-              href={`/reservar?showtimeId=${showtime.id}`}
-              className="flex-1 rounded-full bg-gold px-4 py-2.5 text-center text-sm font-semibold text-ink transition-colors hover:bg-gold-soft"
-            >
-              Reservar
-            </Link>
-          </div>
+          {reservable && (
+            <p className="text-xs text-muted">
+              Aún no queda reservado: en el siguiente paso eliges tus entradas y pagas para asegurar tu cupo.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { formatCOP } from "@/components/public/wizard/types";
 interface TodayShowtime {
   id: string;
   movieTitle: string;
+  roomName: string | null;
   dateLabel: string;
   timeLabel: string;
   status: string;
@@ -52,7 +53,10 @@ export default function DashboardPage() {
         <div key={s.id} className="rounded-2xl border border-line bg-ink-card p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-display text-2xl text-cream">{s.movieTitle}</h2>
-            <span className="text-sm text-gold">{s.timeLabel}</span>
+            <span className="text-sm text-gold">
+              {s.timeLabel}
+              {s.roomName ? ` · ${s.roomName}` : ""}
+            </span>
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">

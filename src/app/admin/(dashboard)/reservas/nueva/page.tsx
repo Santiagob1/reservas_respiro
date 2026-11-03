@@ -12,6 +12,7 @@ interface ShowtimeOption {
   startsAt: string;
   status: string;
   movie: { title: string };
+  room: { name: string } | null;
   availability: { available: number };
   isSpecial: boolean;
   specialMenuPrice: number | null;
@@ -107,7 +108,8 @@ export default function NewManualReservationPage() {
           {showtimes.map((s) => (
             <option key={s.id} value={s.id}>
               {s.isSpecial ? "★ " : ""}
-              {s.movie.title} · {new Date(s.startsAt).toLocaleString("es-CO")} · {s.availability.available} cupos
+              {s.movie.title} · {new Date(s.startsAt).toLocaleString("es-CO")}
+              {s.room ? ` · ${s.room.name}` : ""} · {s.availability.available} cupos
             </option>
           ))}
         </select>

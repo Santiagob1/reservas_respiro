@@ -3,14 +3,19 @@ import { listPublicShowtimes } from "@/server/services/public-showtime.service";
 import { getSettings } from "@/server/services/settings.service";
 import { getCinemaTodayKey } from "@/lib/timezone";
 import { AgendaPicker } from "@/components/public/AgendaPicker";
+import { SpecialPromoPopup } from "@/components/public/SpecialPromoPopup";
 
 export default async function HomePage() {
   const [showtimes, settings] = await Promise.all([listPublicShowtimes(), getSettings()]);
-  const nextShowtime = showtimes.find((s) => s.state === "AVAILABLE" || s.state === "LOW_AVAILABILITY");
+  const isReservable = (s: (typeof showtimes)[number]) => s.state === "AVAILABLE" || s.state === "LOW_AVAILABILITY";
+  const nextShowtime = showtimes.find(isReservable);
+  // Próxima función especial con cupos: se promociona con una ventana emergente al abrir la página.
+  const specialPromo = showtimes.find((s) => s.isSpecial && isReservable(s));
   const todayKey = getCinemaTodayKey();
 
   return (
     <>
+      {specialPromo && <SpecialPromoPopup showtime={specialPromo} />}
       <section className="relative overflow-hidden border-b border-line px-4 py-16 sm:px-6 sm:py-20">
         <div
           className="pointer-events-none absolute inset-0 opacity-20"
