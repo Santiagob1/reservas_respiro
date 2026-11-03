@@ -8,6 +8,7 @@ import { recordAudit } from "@/server/services/audit.service";
 
 const createSchema = z.object({
   movieId: z.string().min(1),
+  roomId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
   capacity: z.number().int().positive(),

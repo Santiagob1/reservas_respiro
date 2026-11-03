@@ -8,6 +8,7 @@ export function WizardHeader({ showtime }: { showtime: PublicShowtimeDto }) {
         <p className="font-display text-lg text-cream">{showtime.movie.title}</p>
         <p className="text-xs text-gold">
           {showtime.dateLabel} · {showtime.timeLabel}
+          {showtime.roomName ? ` · ${showtime.roomName}` : ""}
         </p>
       </div>
       <Link href="/#agenda" className="shrink-0 text-xs text-cream-dim hover:text-gold">

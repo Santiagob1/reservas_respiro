@@ -6,6 +6,7 @@ import { recordAudit } from "@/server/services/audit.service";
 
 const patchSchema = z.object({
   movieId: z.string().min(1).optional(),
+  roomId: z.string().min(1).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   capacity: z.number().int().positive().optional(),

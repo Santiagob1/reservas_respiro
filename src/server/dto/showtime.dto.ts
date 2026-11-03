@@ -1,4 +1,4 @@
-import type { Movie, Showtime } from "@prisma/client";
+import type { Movie, Room, Showtime } from "@prisma/client";
 import type { AvailabilitySnapshot } from "@/server/services/availability.service";
 import { formatCinemaDate, formatCinemaTime, hasPassed } from "@/lib/timezone";
 
@@ -17,6 +17,7 @@ export interface PublicShowtimeDto {
     rating: string;
     trailerUrl: string | null;
   };
+  roomName: string | null;
   startsAt: string;
   dateKey: string; // YYYY-MM-DD en la zona horaria del cine
   dateLabel: string;
@@ -34,7 +35,7 @@ export interface PublicShowtimeDto {
 }
 
 export function toPublicShowtimeDto(
-  showtime: Showtime & { movie: Movie },
+  showtime: Showtime & { movie: Movie; room?: Room | null },
   availability: AvailabilitySnapshot,
   lowAvailabilityThreshold: number
 ): PublicShowtimeDto {
@@ -53,6 +54,7 @@ export function toPublicShowtimeDto(
       rating: showtime.movie.rating,
       trailerUrl: showtime.movie.trailerUrl,
     },
+    roomName: showtime.room?.name ?? null,
     startsAt: showtime.startsAt.toISOString(),
     dateKey: formatCinemaDate(showtime.startsAt, "yyyy-MM-dd"),
     dateLabel: formatCinemaDate(showtime.startsAt),

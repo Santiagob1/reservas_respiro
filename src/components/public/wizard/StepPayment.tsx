@@ -101,7 +101,19 @@ export function StepPayment({
 
   // --- Reserva ya creada, en modo transferencia: mostrar instrucciones + WhatsApp ---
   if (created) {
-    const whatsappText = `Hola Cine Respiro, les envío el comprobante de pago de mi reserva ${created.code} (${state.showtime.movie.title}, ${state.showtime.dateLabel} ${state.showtime.timeLabel}, ${formatCOP(created.totalAmount)}).`;
+    const people = totalPeople(state);
+    const detailLines = getSummaryLines(state, ticketTypes).map((line) => `• ${line.label}`);
+    const whatsappText = [
+      `Hola Cine Respiro, les envío el comprobante de pago de mi reserva ${created.code}.`,
+      ``,
+      `Nombre: ${state.fullName}`,
+      `Función: ${state.showtime.movie.title}`,
+      `Fecha: ${state.showtime.dateLabel} · ${state.showtime.timeLabel}${state.showtime.roomName ? ` · ${state.showtime.roomName}` : ""}`,
+      `Personas: ${people}`,
+      `Entradas:`,
+      ...detailLines,
+      `Total: ${formatCOP(created.totalAmount)}`,
+    ].join("\n");
     const whatsappUrl = `https://wa.me/${paymentSettings.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(whatsappText)}`;
 
     return (

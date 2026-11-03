@@ -23,7 +23,7 @@ import { queueNotification } from "@/server/services/notification.service";
 
 const RESERVATION_INCLUDE = {
   items: true,
-  showtime: { include: { movie: true } },
+  showtime: { include: { movie: true, room: true } },
   customer: true,
   payments: { orderBy: { createdAt: "desc" as const } },
   checkIn: true,

@@ -21,7 +21,7 @@ interface ReservationDetailDto {
   expiresAt: string | null;
   cancelReason: string | null;
   customer: { fullName: string; whatsapp: string; email: string | null };
-  showtime: { id: string; startsAt: string; movie: { title: string } };
+  showtime: { id: string; startsAt: string; movie: { title: string }; room: { name: string } | null };
   items: { ticketTypeId: string; ticketTypeName: string; quantity: number; unitPrice: number; total: number }[];
   payments: { id: string; method: string; status: string; amount: number; cashReference: string | null }[];
   checkIn: { checkedInAt: string } | null;
@@ -37,6 +37,7 @@ interface ShowtimeOption {
   startsAt: string;
   status: string;
   movie: { title: string };
+  room: { name: string } | null;
   availability: { available: number };
 }
 
@@ -151,6 +152,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ id
         <p className="font-display text-xl text-cream">{reservation.showtime.movie.title}</p>
         <p className="text-sm text-cream-dim">
           {new Date(reservation.showtime.startsAt).toLocaleString("es-CO")}
+          {reservation.showtime.room ? ` · ${reservation.showtime.room.name}` : ""}
         </p>
         <p className="mt-2 text-sm text-cream-dim">
           {reservation.customer.fullName} · {reservation.customer.whatsapp}
@@ -254,7 +256,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ id
             <option value="">Selecciona una función</option>
             {showtimeOptions.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.movie.title} · {new Date(s.startsAt).toLocaleString("es-CO")} · {s.availability.available} cupos
+                {s.movie.title} · {new Date(s.startsAt).toLocaleString("es-CO")}
+                {s.room ? ` · ${s.room.name}` : ""} · {s.availability.available} cupos
               </option>
             ))}
           </select>
